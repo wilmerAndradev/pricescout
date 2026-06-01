@@ -1,0 +1,49 @@
+version: '3.8'
+
+services:
+  api:
+    build: 
+      context: ./apps/api
+      dockerfile: Dockerfile
+    container_name: pricescout_api
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./apps/api:/app
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - FASTAPI_ENV=development
+      - PYTHONPATH=/app
+    env_file:
+      - ./apps/web/.env.local
+    depends_on:
+      - redis
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+
+  worker:
+    build: 
+      context: ./apps/api
+      dockerfile: Dockerfile
+    container_name: pricescout_worker
+    volumes:
+      - ./apps/api:/app
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - FASTAPI_ENV=development
+      - PYTHONPATH=/app
+    env_file:
+      - ./apps/web/.env.local
+    depends_on:
+      - redis
+    command: celery -A tasks.celery_app worker --loglevel=info
+
+  redis:
+    image: redis:7-alpine
+    container_name: pricescout_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+volumes:
+  redis_data:

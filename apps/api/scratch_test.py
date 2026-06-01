@@ -1,0 +1,14 @@
+import httpx
+
+url = "http://localhost:8000/api/v1/jobs/scrape"
+headers = {
+    "Content-Type": "application/json",
+    "Authorization": "Bearer eyJhbGciOiJFUzI1NiIsImtpZCI6IjNiZGMwYjRjLTIzODQtNDM2YS04MGE4LWNkYTBmYzhiOTQwZCIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL2h1dXVzaGJ1ZnNldW13d3lycGhkLnN1cGFiYXNlLmNvL2F1dGgvdjEiLCJzdWIiOiJjOWVmZWQwNy02MWZhLTRhODUtYjVlYS1kNjRjM2I4ZWM0MzkiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzc3NTc0MDU1LCJpYXQiOjE3Nzc1NzA0NTUsImVtYWlsIjoidGVzdDFAeW9wbWFpbC5jb20iLCJwaG9uZSI6IiIsImFwcF9tZXRhZGF0YSI6eyJwcm92aWRlciI6ImVtYWlsIiwicHJvdmlkZXJzIjpbImVtYWlsIl19LCJ1c2VyX21ldGFkYXRhIjp7ImVtYWlsIjoidGVzdDFAeW9wbWFpbC5jb20iLCJlbWFpbF92ZXJpZmllZCI6ZmFsc2UsImZ1bGxfbmFtZSI6Ikp1YW4gUGVyZXoiLCJwaG9uZV92ZXJpZmllZCI6ZmFsc2UsInN1YiI6ImM5ZWZlZDA3LTYxZmEtNGE4NS1iNWVhLWQ2NGMzYjhlYzQzOSJ9LCJyb2xlIjoiYXV0aGVudGljYXRlZCIsImFhbCI6ImFhbDEiLCJhbXIiOlt7Im1ldGhvZCI6InBhc3N3b3JkIiwidGltZXN0YW1wIjoxNzc3NTcwNDU1fV0sInNlc3Npb25faWQiOiJhMDRlNDcyMS0yY2RhLTRhMzAtOGY0Ny0yNGEwMGQ3YWIyODEiLCJpc19hbm9ueW1vdXMiOmZhbHNlfQ.UB5hTjO5oV2T6-5YJuAuZA_UVxa5BQwlg6Qs3uHw9kwdo_SG4d18hFI54kD4Lx8f5eehynmCJcxakk8HtPo0Kw"
+}
+data = {
+    "urls": ["https://articulo.mercadolibre.cl/MLC-1436444641-iphone-13-128-gb-blanco-estelar-_JM"]
+}
+
+res = httpx.post(url, headers=headers, json=data)
+print("Status:", res.status_code)
+print("Response:", res.json())
