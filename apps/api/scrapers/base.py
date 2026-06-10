@@ -1,19 +1,192 @@
-"""
-scrapers/base.py — Motor A · Base Scraper con Scrapling
-SRS v3.0 §7 (Arquitectura Técnica) — Motor híbrido determinista.
-
-Reemplaza el antiguo PlaywrightScraper (playwright-stealth) por Scrapling:
-  - DynamicFetcher: para tiendas estándar (Falabella, Ripley, MercadoLibre, etc.)
-  - StealthyFetcher: para tiendas con Cloudflare heavy (Lider) — ver scrapers/lider.py
-
-Scrapling docs: https://scrapling.readthedocs.io/en/latest/
-"""
-
 from abc import ABC, abstractmethod
 import logging
 import re
+import asyncio
+import random
+from datetime import datetime, timezone
+from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
+
+
+class ScrapedProduct(BaseModel):
+    store_slug: str           # Identificador único de la tienda (ej: "cosmetic")
+    store_name: str           # Nombre legible (ej: "Cosmetic")
+    store_url: str            # URL base de la tienda
+    title: str                # Nombre del producto sin normalizar
+    title_normalized: str     # Nombre normalizado (usar normalizer.py)
+    price: float              # Precio en CLP
+    currency: str = "CLP"     # Siempre "CLP"
+    url: str                  # URL directa al producto
+    image_url: str | None = None
+    available: bool           # Si tiene stock
+    variants: list[dict] = [] # Variantes (tallas, ml, etc.) si existen
+    raw_data: dict            # JSON crudo original para debug
+    scraped_at: datetime      # Timestamp UTC del momento del scrape
+    sync_method: str          # "shopify_json" | "shopify_js" | "html_parser"
+
+
+class SyncResult(BaseModel):
+    store_slug: str
+    total_scraped: int = 0
+    added: int = 0
+    updated: int = 0
+    errors: list[str] = []
+    success: bool = True
+
+
+class ScraperBase(ABC):
+    """
+    Clase base abstracta para todos los scrapers de sincronización de catálogo.
+    Soporta rate limiting y persistencia directa en Supabase.
+    """
+
+    def __init__(self, store_slug: str, store_name: str, store_url: str, catalog_url: str | None = None):
+        self.store_slug = store_slug
+        self.store_name = store_name
+        self.store_url = store_url.rstrip("/")
+        self.catalog_url = catalog_url
+        self.logger = logging.getLogger(f"scraper.{self.store_slug}")
+        
+        # Cargar retardos de peticiones desde el entorno
+        import os
+        try:
+            self.delay_min = float(os.environ.get("SCRAPER_REQUEST_DELAY_MIN", 1.0))
+            self.delay_max = float(os.environ.get("SCRAPER_REQUEST_DELAY_MAX", 3.0))
+        except ValueError:
+            self.delay_min = 1.0
+            self.delay_max = 3.0
+
+    @abstractmethod
+    async def fetch_products(self) -> list[ScrapedProduct]:
+        """Fetch all products for the store using the assigned strategy."""
+        pass
+
+    async def _request_delay(self):
+        """Espera aleatoria entre peticiones para evitar bloqueos y saturación."""
+        delay = random.uniform(self.delay_min, self.delay_max)
+        self.logger.debug(f"Esperando {delay:.2f} segundos antes de la siguiente petición...")
+        await asyncio.sleep(delay)
+
+    async def run(self, db_client=None) -> SyncResult:
+        """
+        Ejecuta la sincronización completa del catálogo de la tienda.
+        Si se pasa un cliente de Supabase (db_client), guarda los resultados en DB.
+        """
+        self.logger.info(f"Iniciando sincronización para la tienda: {self.store_name} ({self.store_slug})")
+        result = SyncResult(store_slug=self.store_slug)
+        
+        try:
+            products = await self.fetch_products()
+            result.total_scraped = len(products)
+            
+            if db_client:
+                await self._save_to_db(db_client, products, result)
+                
+            self.logger.info(
+                f"Sincronización completada para {self.store_name}. "
+                f"Extraídos: {result.total_scraped} | Creados: {result.added} | "
+                f"Actualizados: {result.updated} | Errores: {len(result.errors)}"
+            )
+        except Exception as e:
+            self.logger.exception(f"Error crítico en ejecución de sync para {self.store_slug}: {e}")
+            result.errors.append(str(e))
+            result.success = False
+            
+        return result
+
+    async def _save_to_db(self, db_client, products: list[ScrapedProduct], result: SyncResult):
+        """
+        Persiste los productos extraídos en la tabla 'products' y registra el historial.
+        """
+        self.logger.info(f"Guardando {len(products)} productos en la base de datos...")
+        now_iso = datetime.now(timezone.utc).isoformat()
+        
+        # Actualizar estado de sincronización de la tienda
+        try:
+            db_client.table("stores").upsert({
+                "slug": self.store_slug,
+                "name": self.store_name,
+                "url": self.store_url,
+                "sync_method": products[0].sync_method if products else "unknown",
+                "catalog_url": self.catalog_url,
+                "active": True,
+                "last_sync_at": now_iso,
+                "last_sync_products_count": len(products)
+            }).execute()
+        except Exception as e:
+            self.logger.error(f"No se pudo actualizar el estado de la tienda {self.store_slug}: {e}")
+            result.errors.append(f"Store status update failed: {str(e)}")
+
+        # Upsert de cada producto e inserción de historial de precio
+        for prod in products:
+            try:
+                from scrapers.normalizer import extract_volume_ml
+                
+                # Intentar obtener volumen de ml del producto
+                volume_ml = prod.raw_data.get("volume_ml")
+                if volume_ml is None and prod.variants:
+                    volume_ml = prod.variants[0].get("volume_ml")
+                if volume_ml is None:
+                    volume_ml = extract_volume_ml(prod.title)
+
+                prod_data = {
+                    "store_slug": prod.store_slug,
+                    "title": prod.title,
+                    "title_normalized": prod.title_normalized,
+                    "price": prod.price,
+                    "currency": prod.currency,
+                    "url": prod.url,
+                    "image_url": prod.image_url,
+                    "available": prod.available,
+                    "volume_ml": volume_ml,
+                    "variants": prod.variants,
+                    "raw_data": prod.raw_data,
+                    "sync_method": prod.sync_method,
+                    "last_seen_at": now_iso
+                }
+                
+                # Realizar upsert en la tabla 'products'
+                upsert_res = db_client.table("products").upsert(
+                    prod_data,
+                    on_conflict="store_slug,title_normalized"
+                ).execute()
+                
+                if upsert_res.data:
+                    db_prod = upsert_res.data[0]
+                    product_id = db_prod.get("id")
+                    first_seen = db_prod.get("first_seen_at")
+                    
+                    # Calcular estadísticas (Creado vs Actualizado)
+                    is_new = False
+                    if first_seen:
+                        try:
+                            fs_dt = datetime.fromisoformat(first_seen.replace("Z", "+00:00"))
+                            now_dt = datetime.now(timezone.utc)
+                            if (now_dt - fs_dt).total_seconds() < 10:
+                                is_new = True
+                        except Exception:
+                            pass
+                            
+                    if is_new:
+                        result.added += 1
+                    else:
+                        result.updated += 1
+                        
+                    # Insertar en la tabla product_price_history
+                    db_client.table("product_price_history").insert({
+                        "product_id": product_id,
+                        "store_slug": prod.store_slug,
+                        "title_normalized": prod.title_normalized,
+                        "price": prod.price,
+                        "available": prod.available,
+                        "recorded_at": now_iso
+                    }).execute()
+                    
+            except Exception as e:
+                self.logger.error(f"Error al guardar producto '{prod.title}': {e}")
+                result.errors.append(f"Failed to save product '{prod.title}': {str(e)}")
+
 
 
 def _parse_clp(text: str) -> int:

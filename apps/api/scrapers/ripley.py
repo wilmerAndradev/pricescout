@@ -1,14 +1,14 @@
 """
 scrapers/ripley.py — Motor A · Ripley.cl
-SRS v3.0 §MA-04 — Tienda conocida, parser determinista con Scrapling DynamicFetcher.
+SRS v3.0 §MA-04 — Scraper con StealthyFetcher (Camoufox) para bypasear Cloudflare.
 
 Ripley usa Hybris / SFCC con sus propias clases de precio .price-ripley y schema.org.
 """
 
-from scrapers.base import ScraplingBaseScraper
+from scrapers.stealth_base import StealthyBaseScraper
 
 
-class RipleyScraper(ScraplingBaseScraper):
+class RipleyScraper(StealthyBaseScraper):
     store_name = "Ripley"
 
     WAIT_SELECTOR = ".product-title, h1"

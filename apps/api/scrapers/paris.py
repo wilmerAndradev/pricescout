@@ -1,15 +1,15 @@
 """
 scrapers/paris.py — Motor A · Paris.cl (Cencosud)
-SRS v3.0 §MA-04 — Tienda conocida, parser determinista con Scrapling DynamicFetcher.
+SRS v3.0 §MA-04 — Scraper con StealthyFetcher (Camoufox) para bypasear Cloudflare.
 
 Paris usa SFCC (Salesforce Commerce Cloud) con schema.org microdata.
 Los precios están en [itemprop='price'] con atributo content.
 """
 
-from scrapers.base import ScraplingBaseScraper
+from scrapers.stealth_base import StealthyBaseScraper
 
 
-class ParisScraper(ScraplingBaseScraper):
+class ParisScraper(StealthyBaseScraper):
     store_name = "Paris"
 
     WAIT_SELECTOR = "h1, [itemprop='name'], .product-name"

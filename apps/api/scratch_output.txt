@@ -1,0 +1,75 @@
+--- Recent 200 lines from Celery worker ---
+ 
+ -------------- celery@1bbfce119e17 v5.6.3 (recovery)
+--- ***** ----- 
+-- ******* ---- Linux-6.6.87.2-microsoft-standard-WSL2-x86_64-with-glibc2.41 2026-06-01 13:04:32
+- *** --- * --- 
+- ** ---------- [config]
+- ** ---------- .> app:         pricescout_tasks:0x7ace64b86fd0
+- ** ---------- .> transport:   redis://redis:6379/0
+- ** ---------- .> results:     redis://redis:6379/0
+- *** --- * --- .> concurrency: 16 (prefork)
+-- ******* ---- .> task events: OFF (enable -E to monitor tasks in this worker)
+--- ***** ----- 
+ -------------- [queues]
+                .> celery           exchange=celery(direct) key=celery
+                
+
+[tasks]
+  . tasks.jobs.scrape_url_task
+
+
+worker: Warm shutdown (MainProcess)
+ 
+ -------------- celery@1bbfce119e17 v5.6.3 (recovery)
+--- ***** ----- 
+-- ******* ---- Linux-6.6.87.2-microsoft-standard-WSL2-x86_64-with-glibc2.41 2026-06-01 23:50:33
+- *** --- * --- 
+- ** ---------- [config]
+- ** ---------- .> app:         pricescout_tasks:0x77dbf688d810
+- ** ---------- .> transport:   redis://redis:6379/0
+- ** ---------- .> results:     redis://redis:6379/0
+- *** --- * --- .> concurrency: 16 (prefork)
+-- ******* ---- .> task events: OFF (enable -E to monitor tasks in this worker)
+--- ***** ----- 
+ -------------- [queues]
+                .> celery           exchange=celery(direct) key=celery
+                
+
+[tasks]
+  . tasks.jobs.run_autonomous_search
+  . tasks.jobs.scrape_store_search_task
+  . tasks.jobs.search_complete_callback_task
+
+
+worker: Warm shutdown (MainProcess)
+ 
+ -------------- celery@1bbfce119e17 v5.6.3 (recovery)
+--- ***** ----- 
+-- ******* ---- Linux-6.6.87.2-microsoft-standard-WSL2-x86_64-with-glibc2.41 2026-06-02 00:02:25
+- *** --- * --- 
+- ** ---------- [config]
+- ** ---------- .> app:         pricescout_tasks:0x74a8227c0410
+- ** ---------- .> transport:   redis://redis:6379/0
+- ** ---------- .> results:     redis://redis:6379/0
+- *** --- * --- .> concurrency: 16 (prefork)
+-- ******* ---- .> task events: OFF (enable -E to monitor tasks in this worker)
+--- ***** ----- 
+ -------------- [queues]
+                .> celery           exchange=celery(direct) key=celery
+                
+
+[tasks]
+  . tasks.jobs.run_autonomous_search
+  . tasks.jobs.scrape_store_search_task
+  . tasks.jobs.scrape_url_task
+  . tasks.jobs.search_complete_callback_task
+
+
+--- Search tasks status lines ---
+  . tasks.jobs.run_autonomous_search
+  . tasks.jobs.scrape_store_search_task
+  . tasks.jobs.search_complete_callback_task
+  . tasks.jobs.run_autonomous_search
+  . tasks.jobs.scrape_store_search_task
+  . tasks.jobs.search_complete_callback_task

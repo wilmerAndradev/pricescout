@@ -265,3 +265,51 @@ def extract_with_llm(url: str, supabase_client=None) -> dict:
         "confidence_score": extraction.confidence,
         "extraction_notes": extraction.extraction_notes,
     }
+
+
+def infer_product_category(query: str, supabase_client=None) -> str:
+    """
+    Infers the category of a search query (e.g. 'perfumería', 'tecnología', 'calzado', etc.) using Gemini 2.0.
+    """
+    logger.info(f"[Classifier] Inferring category for query: '{query}'")
+    prompt = f"""
+    Clasifica la siguiente consulta de búsqueda de un usuario de e-commerce en una de estas categorías:
+    tecnología, computación, hardware, moda, calzado, hogar, perfumería, juguetes, construcción, herramientas, supermercado, otros.
+
+    Consulta de búsqueda: "{query}"
+
+    Responde únicamente con el nombre exacto de la categoría seleccionada de la lista en minúsculas. No agregues explicaciones, puntuación ni texto adicional.
+    """
+    
+    import google.generativeai as genai
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if not api_key:
+        logger.warning("[Classifier] GEMINI_API_KEY not set, defaulting to 'otros'")
+        return "otros"
+
+    t0 = time.time()
+    try:
+        genai.configure(api_key=api_key)
+        model = genai.GenerativeModel("gemini-2.0-flash-lite")
+        response = model.generate_content(prompt)
+        category = response.text.strip().lower()
+        
+        latency = int((time.time() - t0) * 1000)
+        logger.info(f"[Classifier] Gemini classified as '{category}' in {latency}ms")
+        
+        # Validate category is in allowed list
+        allowed = {"tecnología", "computación", "hardware", "moda", "calzado", "hogar", "perfumería", "juguetes", "construcción", "herramientas", "supermercado", "otros"}
+        if category in allowed:
+            if supabase_client:
+                _log_llm_call(supabase_client, "gemini", "gemini-2.0-flash-lite", True, latency)
+            return category
+        else:
+            logger.warning(f"[Classifier] Gemini returned unrecognized category '{category}', defaulting to 'otros'")
+            return "otros"
+    except Exception as e:
+        latency = int((time.time() - t0) * 1000)
+        logger.warning(f"[Classifier] Gemini classification failed ({latency}ms): {e}, defaulting to 'otros'")
+        if supabase_client:
+            _log_llm_call(supabase_client, "gemini", "gemini-2.0-flash-lite", False, latency, str(e))
+        return "otros"
+

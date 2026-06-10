@@ -1,15 +1,16 @@
 """
 scrapers/mercadolibre.py — Motor A · MercadoLibre.cl
-SRS v3.0 §MA-04 — Tienda conocida, parser determinista con Scrapling DynamicFetcher.
+SRS v3.0 §MA-04 — Scraper con StealthyFetcher para bypasear Captcha.
 
-MercadoLibre usa React SSR con carga rápida y sin Cloudflare duro.
-Los precios están en meta[itemprop='price'] (schema.org) y en spans .andes-money-amount.
+MercadoLibre usa React SSR. Activa Captcha 302 con DynamicFetcher.
+StealthyFetcher (Camoufox) lo bypasea exitosamente.
+Los precios están en meta[itemprop='price'] y en spans .andes-money-amount.
 """
 
-from scrapers.base import ScraplingBaseScraper
+from scrapers.stealth_base import StealthyBaseScraper
 
 
-class MercadoLibreScraper(ScraplingBaseScraper):
+class MercadoLibreScraper(StealthyBaseScraper):
     store_name = "MercadoLibre"
 
     # MercadoLibre carga rápido; esperamos el título h1

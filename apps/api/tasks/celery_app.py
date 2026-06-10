@@ -7,7 +7,7 @@ app = Celery(
     "pricescout_tasks",
     broker=redis_url,
     backend=redis_url,
-    include=["tasks.jobs"]
+    include=["tasks.jobs", "scrapers.tasks"]
 )
 
 app.conf.update(
@@ -19,3 +19,13 @@ app.conf.update(
     # Configure strict rate limits per worker as requested by SRS
     worker_prefetch_multiplier=1,
 )
+
+def check_celery_available() -> bool:
+    """Checks if Redis broker for Celery is connected/reachable."""
+    try:
+        with app.connection(connect_timeout=1.0) as conn:
+            conn.connect()
+        return True
+    except Exception:
+        return False
+

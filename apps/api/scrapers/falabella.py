@@ -1,19 +1,21 @@
 """
 scrapers/falabella.py — Motor A · Falabella.com
-SRS v3.0 §MA-04 — Tienda conocida, parser determinista con Scrapling DynamicFetcher.
+SRS v3.0 §MA-04 — Scraper con StealthyFetcher (Camoufox) para bypasear Cloudflare.
 
 Falabella usa React con lazy-loading de precios. Sus clases CSS siguen el patrón
 .copy12 (precio evento), .copy10 (precio normal), .copy8 (internet price).
+
+NOTA: Usa StealthyBaseScraper porque DynamicFetcher recibe 403 de Cloudflare
+tanto en búsqueda como en páginas de producto.
 """
 
-from scrapers.base import ScraplingBaseScraper
+from scrapers.stealth_base import StealthyBaseScraper
 
 
-class FalabellaScraper(ScraplingBaseScraper):
+class FalabellaScraper(StealthyBaseScraper):
     store_name = "Falabella"
 
-    WAIT_SELECTOR = "h1, .product-name, [class*='ProductName'], [class*='product-name']"
-    WAIT_AFTER_LOAD = 2500   # Falabella requiere más tiempo para renderizar precios
+    WAIT_AFTER_LOAD = 3000   # Falabella requiere más tiempo para renderizar precios
 
     def _extract(self, page) -> dict:
         # ── Nombre ────────────────────────────────────────────────────────────
