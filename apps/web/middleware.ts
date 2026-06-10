@@ -34,10 +34,19 @@ export async function middleware(request: NextRequest) {
 
   const isAuthPage = request.nextUrl.pathname.startsWith("/login") || request.nextUrl.pathname.startsWith("/register");
   
-  // Exclude public routes like /design-system
-  const isPublicRoute = request.nextUrl.pathname === "/" || request.nextUrl.pathname.startsWith("/design-system");
+  // Exclude Next.js internals, static files, and API routes
+  const isNextInternal = 
+    request.nextUrl.pathname.startsWith("/_next") || 
+    request.nextUrl.pathname.startsWith("/api") ||
+    request.nextUrl.pathname.includes("/favicon.ico");
 
-  if (!user && !isAuthPage && !isPublicRoute) {
+  // Exclude public routes like /design-system or /search
+  const isPublicRoute = 
+    request.nextUrl.pathname === "/" || 
+    request.nextUrl.pathname.startsWith("/design-system") ||
+    request.nextUrl.pathname.startsWith("/search");
+
+  if (!user && !isAuthPage && !isPublicRoute && !isNextInternal) {
     // no user, potentially respond by redirecting the user to the login page
     const url = request.nextUrl.clone();
     url.pathname = "/login";

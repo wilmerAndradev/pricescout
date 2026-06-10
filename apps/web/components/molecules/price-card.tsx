@@ -63,9 +63,9 @@ export function PriceCard({
       <div className="flex flex-col flex-grow justify-between py-1">
         <div>
           <div className="flex flex-wrap items-center gap-2 mb-2">
-            <Badge variant="outline" className="uppercase text-[10px] tracking-wider text-[var(--color-slate-500)]">
+            <span className="inline-flex items-center rounded-full font-body text-[10px] font-semibold leading-none h-5 px-2 bg-white border border-[var(--color-slate-200)] text-[var(--color-slate-500)] uppercase tracking-wider">
               {storeName}
-            </Badge>
+            </span>
             {extractionMethod === "llm" && (
               <Badge className="bg-indigo-100 text-indigo-700 hover:bg-indigo-100 border-indigo-200 text-[10px]">
                 Extraído con IA
@@ -77,9 +77,9 @@ export function PriceCard({
               </Badge>
             )}
             {!inStock && (
-              <Badge variant="destructive" className="text-[10px]">
+              <span className="inline-flex items-center rounded-full font-body text-[10px] font-semibold leading-none h-5 px-2 bg-red-50 text-red-600 border border-red-100">
                 Sin stock
-              </Badge>
+              </span>
             )}
           </div>
           <h3 className="font-body text-base font-medium text-[var(--color-slate-900)] line-clamp-2 leading-tight">
