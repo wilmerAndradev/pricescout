@@ -176,10 +176,11 @@ NUNCA commitear .env ni .env.local. Solo .env.example.
 ### Completado ✅
 - Arquitectura base y SRS v4.0 definidos
 - Estructura de monorepo inicializada
-- docker-compose (FastAPI + Redis + Celery Worker)
+- docker-compose (FastAPI + Redis + Celery Worker) con Healthchecks y dependencias ordenadas
 - Migraciones Supabase base
 - Prompt del agente scraper documentado
 - Auth base (Supabase + Google OAuth)
+- Pipelines de CI/CD en GitHub Actions (`ci-cd.yml` y `e2e.yml`) completados
 
 ### En progreso 🔄
 - Motor A Scrapling para KNOWN_STORES
@@ -193,8 +194,7 @@ NUNCA commitear .env ni .env.local. Solo .env.example.
 - Pagos Transbank Webpay Plus (MA-08)
 - Modo Configurado empresas (MA-09)
 - Exportaciones CSV/Excel/PDF (MA-10)
-- GitHub Actions CI/CD completo
-- Tests unitarios y E2E
+- Tests unitarios y E2E (a ser implementados por @qa)
 - Documentación de API pública (plan Business)
 
 ---
