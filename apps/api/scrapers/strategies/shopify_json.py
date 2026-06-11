@@ -4,8 +4,26 @@ import logging
 from datetime import datetime, timezone
 from scrapers.base import ScraperBase, ScrapedProduct
 from scrapers.normalizer import normalize_product_title
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception
 
 logger = logging.getLogger(__name__)
+
+def _is_retryable_status(exception):
+    if isinstance(exception, httpx.HTTPStatusError):
+        status_code = exception.response.status_code
+        return status_code == 429 or (500 <= status_code < 600)
+    return isinstance(exception, httpx.RequestError)
+
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=2, max=10),
+    retry=retry_if_exception(_is_retryable_status),
+    reraise=True
+)
+async def _get_with_retry(client: httpx.AsyncClient, url: str):
+    response = await client.get(url)
+    response.raise_for_status()
+    return response
 
 class ShopifyJsonScraper(ScraperBase):
     """
@@ -27,36 +45,15 @@ class ShopifyJsonScraper(ScraperBase):
                 url = f"{self.store_url}/products.json?limit={limit}&page={page}"
                 self.logger.info(f"Fetching page {page} from {self.store_name}...")
                 
-                # Intentos de reintento con backoff exponencial
-                retries = 3
-                success = False
-                response_data = None
+                try:
+                    response = await _get_with_retry(client, url)
+                    response_data = response.json()
+                except Exception as exc:
+                    self.logger.error(f"Failed to fetch products on page {page} after retries. Error: {exc}")
+                    break
                 
-                for attempt in range(1, retries + 1):
-                    try:
-                        response = await client.get(url)
-                        if response.status_code == 200:
-                            response_data = response.json()
-                            success = True
-                            break
-                        elif response.status_code == 429:
-                            wait_time = attempt * 5
-                            self.logger.warning(f"Rate limited (429). Attempt {attempt}/{retries}. Waiting {wait_time}s...")
-                            await asyncio.sleep(wait_time)
-                        elif 500 <= response.status_code < 600:
-                            wait_time = attempt * 2
-                            self.logger.warning(f"Server error ({response.status_code}). Attempt {attempt}/{retries}. Waiting {wait_time}s...")
-                            await asyncio.sleep(wait_time)
-                        else:
-                            self.logger.error(f"HTTP error {response.status_code} fetching page {page}")
-                            break
-                    except httpx.RequestError as exc:
-                        wait_time = attempt * 2
-                        self.logger.warning(f"Request error: {exc}. Attempt {attempt}/{retries}. Waiting {wait_time}s...")
-                        await asyncio.sleep(wait_time)
-                
-                if not success or not response_data or "products" not in response_data:
-                    self.logger.error(f"Failed to fetch products on page {page} after {retries} attempts.")
+                if not response_data or "products" not in response_data:
+                    self.logger.error(f"Invalid response structure on page {page}")
                     break
                     
                 products = response_data["products"]

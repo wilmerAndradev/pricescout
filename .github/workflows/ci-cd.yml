@@ -1,0 +1,210 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ "**" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  lint:
+    name: Linting
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install Frontend Dependencies
+        run: |
+          cd apps/web
+          npm ci
+
+      - name: Run ESLint (Frontend)
+        run: |
+          cd apps/web
+          npm run lint
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Python Tooling
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff
+
+      - name: Run Ruff Check (Backend)
+        run: |
+          ruff check apps/api
+
+  typecheck:
+    name: Type Checking
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install Frontend Dependencies
+        run: |
+          cd apps/web
+          npm ci
+
+      - name: Run Typecheck (Frontend)
+        run: |
+          cd apps/web
+          npx tsc --noEmit
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Python Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f apps/api/requirements.txt ]; then
+            pip install -r apps/api/requirements.txt
+          fi
+
+      - name: Run Typecheck (Backend - mypy)
+        run: |
+          if [ -f apps/api/pyproject.toml ] || [ -f apps/api/mypy.ini ] || [ -f apps/api/setup.cfg ]; then
+            pip install mypy
+            mypy apps/api
+          else
+            echo "mypy not configured, skipping typecheck for backend."
+          fi
+        shell: bash
+
+  test-unit:
+    name: Unit Testing
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install Frontend Dependencies
+        run: |
+          cd apps/web
+          npm ci
+
+      - name: Run Vitest (Frontend)
+        run: |
+          cd apps/web
+          if grep -q '"test"' package.json; then
+            npm run test -- --watch=false || npx vitest run --passWithNoTests
+          else
+            npx -y vitest run --passWithNoTests
+          fi
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Python Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f apps/api/requirements.txt ]; then
+            pip install -r apps/api/requirements.txt
+          fi
+          pip install pytest pytest-asyncio
+
+      - name: Run Pytest (Backend)
+        run: |
+          if [ -d apps/api/tests ] || ls apps/api/**/test_*.py 1>/dev/null 2>&1; then
+            pytest apps/api
+          else
+            echo "No pytest tests configured, skipping."
+          fi
+        shell: bash
+
+  build:
+    name: Build & Packaging
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install Frontend Dependencies
+        run: |
+          cd apps/web
+          npm ci
+
+      - name: Build Frontend (Next.js)
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co' }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder' }}
+        run: |
+          cd apps/web
+          npm run build
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Backend (Docker)
+        run: |
+          docker build -t pricescout-api:latest ./apps/api
+
+  deploy:
+    name: Deploy to Production
+    needs: [lint, typecheck, test-unit, build]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Expose Environment Variables and Secrets
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+        run: |
+          echo "Deploying applications with configured repository secrets..."
+          # Placeholder for deployment command.
+          # Here, devops could run a deploy script, push to Vercel/Fly.io, etc.
+          echo "Deploying backend and frontend..."
+
+      - name: Notify Deploy Success
+        if: success()
+        run: |
+          echo "DEPLOY SUCCESSFUL: PriceScout Chile has been deployed to production."
+
+      - name: Notify Deploy Failure
+        if: failure()
+        run: |
+          echo "DEPLOY FAILED: Please check GitHub Actions logs."

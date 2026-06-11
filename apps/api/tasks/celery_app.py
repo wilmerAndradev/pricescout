@@ -10,6 +10,8 @@ app = Celery(
     include=["tasks.jobs", "scrapers.tasks"]
 )
 
+from celery.schedules import crontab
+
 app.conf.update(
     task_serializer="json",
     accept_content=["json"],
@@ -18,6 +20,12 @@ app.conf.update(
     enable_utc=True,
     # Configure strict rate limits per worker as requested by SRS
     worker_prefetch_multiplier=1,
+    beat_schedule={
+        "sync-all-stores": {
+            "task": "scrapers.tasks.sync_all_stores",
+            "schedule": crontab(minute=0, hour="*/6"),
+        }
+    }
 )
 
 def check_celery_available() -> bool:

@@ -1,9 +1,10 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, HTTPException
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
-from routers import jobs, search, scraper
+from routers import jobs, search, scraper, projects, billing
 
 limiter = Limiter(key_func=get_remote_address)
 
@@ -16,6 +17,22 @@ app = FastAPI(
 # SlowAPI Rate Limiting
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# Custom exception handler to format error responses as {"detail": "message", "code": "CODE"}
+@app.exception_handler(HTTPException)
+async def custom_http_exception_handler(request: Request, exc: HTTPException):
+    if isinstance(exc.detail, dict) and "code" in exc.detail:
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={
+                "detail": exc.detail.get("detail") or exc.detail.get("message") or str(exc.detail),
+                "code": exc.detail["code"]
+            }
+        )
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail}
+    )
 
 # CORS Middleware Strict Setup
 origins = [
@@ -43,3 +60,5 @@ def read_root(request: Request):
 app.include_router(jobs.router, prefix="/api/v1")
 app.include_router(search.router, prefix="/api/v1")
 app.include_router(scraper.router, prefix="/api/v1")
+app.include_router(projects.router, prefix="/api/v1")
+app.include_router(billing.router, prefix="/api/v1")

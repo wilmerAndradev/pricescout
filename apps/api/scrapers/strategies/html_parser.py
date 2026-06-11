@@ -257,7 +257,12 @@ class HtmlParserScraper(ScraperBase):
                 genai.configure(api_key=gemini_api_key)
                 
                 # Intentar usar el modelo pedido, o el estable en su defecto
-                model_names = ["gemini-flash-latest", "gemini-2.5-flash-lite", "gemini-3.1-flash-lite"]
+                model_names = [
+                    "gemini-2.5-flash-lite-preview-06-17",
+                    "gemini-2.5-flash-lite",
+                    "gemini-flash-latest",
+                    "gemini-3.1-flash-lite"
+                ]
                 data = None
                 for name in model_names:
                     try:
@@ -267,6 +272,7 @@ class HtmlParserScraper(ScraperBase):
                             generation_config={
                                 "response_mime_type": "application/json",
                                 "temperature": 0.0,
+                                "max_output_tokens": 8000,
                             }
                         )
                         # Ejecutar en hilo

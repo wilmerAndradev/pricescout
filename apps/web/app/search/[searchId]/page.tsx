@@ -281,6 +281,7 @@ export default function SearchResultsPage() {
   const [selectedGenders, setSelectedGenders] = React.useState<string[]>([]);
   const [selectedVolumes, setSelectedVolumes] = React.useState<string[]>([]);
   const [selectedTypes, setSelectedTypes] = React.useState<string[]>([]);
+  const [selectedStores, setSelectedStores] = React.useState<string[]>([]);
   const [maxPriceFilter, setMaxPriceFilter] = React.useState<number | "">("");
   const [minPriceFilter, setMinPriceFilter] = React.useState<number | "">("");
   const [onlyInStock, setOnlyInStock] = React.useState(false);
@@ -291,6 +292,7 @@ export default function SearchResultsPage() {
     const gendersSet = new Set<string>();
     const volumesSet = new Set<string>();
     const typesSet = new Set<string>();
+    const storesSet = new Set<string>();
     let absoluteMin = Infinity;
     let absoluteMax = -Infinity;
 
@@ -300,6 +302,7 @@ export default function SearchResultsPage() {
       if (gender) gendersSet.add(gender);
       if (volume) volumesSet.add(volume);
       if (type) typesSet.add(type);
+      if (product.store_name) storesSet.add(product.store_name);
       
       if (product.price_clp > 0) {
         if (product.price_clp < absoluteMin) absoluteMin = product.price_clp;
@@ -316,6 +319,7 @@ export default function SearchResultsPage() {
         return numA - numB;
       }),
       types: Array.from(typesSet).sort(),
+      stores: Array.from(storesSet).sort(),
       minPrice: absoluteMin === Infinity ? 0 : absoluteMin,
       maxPrice: absoluteMax === -Infinity ? 0 : absoluteMax
     };
@@ -330,6 +334,7 @@ export default function SearchResultsPage() {
       if (selectedGenders.length > 0 && !selectedGenders.includes(gender)) return false;
       if (selectedVolumes.length > 0 && volume && !selectedVolumes.includes(volume)) return false;
       if (selectedTypes.length > 0 && !selectedTypes.includes(type)) return false;
+      if (selectedStores.length > 0 && !selectedStores.includes(product.store_name)) return false;
       
       if (minPriceFilter !== "" && product.price_clp < minPriceFilter) return false;
       if (maxPriceFilter !== "" && product.price_clp > maxPriceFilter) return false;
@@ -338,7 +343,7 @@ export default function SearchResultsPage() {
       
       return true;
     });
-  }, [results, selectedBrands, selectedGenders, selectedVolumes, selectedTypes, minPriceFilter, maxPriceFilter, onlyInStock]);
+  }, [results, selectedBrands, selectedGenders, selectedVolumes, selectedTypes, selectedStores, minPriceFilter, maxPriceFilter, onlyInStock]);
 
   // KPIs dinámicos basados en la selección filtrada
   const dynamicKpis = React.useMemo(() => {
@@ -831,13 +836,14 @@ export default function SearchResultsPage() {
                   <div className="lg:col-span-1 bg-white p-6 rounded-2xl border border-[var(--color-slate-200)] shadow-[var(--shadow-sm)] space-y-6">
                     <div className="flex items-center justify-between pb-4 border-b border-[var(--color-slate-100)]">
                       <h4 className="font-display font-bold text-[var(--color-slate-900)] text-sm uppercase tracking-wider">Filtros</h4>
-                      {(selectedBrands.length > 0 || selectedGenders.length > 0 || selectedVolumes.length > 0 || selectedTypes.length > 0 || minPriceFilter !== "" || maxPriceFilter !== "" || onlyInStock) && (
+                      {(selectedBrands.length > 0 || selectedGenders.length > 0 || selectedVolumes.length > 0 || selectedTypes.length > 0 || selectedStores.length > 0 || minPriceFilter !== "" || maxPriceFilter !== "" || onlyInStock) && (
                         <button 
                           onClick={() => {
                             setSelectedBrands([]);
                             setSelectedGenders([]);
                             setSelectedVolumes([]);
                             setSelectedTypes([]);
+                            setSelectedStores([]);
                             setMinPriceFilter("");
                             setMaxPriceFilter("");
                             setOnlyInStock(false);
@@ -879,6 +885,29 @@ export default function SearchResultsPage() {
                                 className="rounded text-[var(--color-primary-600)] focus:ring-[var(--color-primary-500)] border-[var(--color-slate-300)] w-4 h-4 cursor-pointer"
                               />
                               <span>{brand}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Filtro de Tienda */}
+                    {filterOptions.stores.length > 1 && (
+                      <div className="space-y-2.5 pt-4 border-t border-[var(--color-slate-100)]">
+                        <h5 className="text-[10px] font-bold text-[var(--color-slate-400)] uppercase tracking-wider">Tienda</h5>
+                        <div className="space-y-2 max-h-40 overflow-y-auto pr-1 scrollbar-thin">
+                          {filterOptions.stores.map(store => (
+                            <label key={store} className="flex items-center gap-2.5 cursor-pointer select-none text-xs text-[var(--color-slate-600)] font-body">
+                              <input 
+                                type="checkbox" 
+                                checked={selectedStores.includes(store)}
+                                onChange={(e) => {
+                                  if (e.target.checked) setSelectedStores([...selectedStores, store]);
+                                  else setSelectedStores(selectedStores.filter(s => s !== store));
+                                }}
+                                className="rounded text-[var(--color-primary-600)] focus:ring-[var(--color-primary-500)] border-[var(--color-slate-300)] w-4 h-4 cursor-pointer"
+                              />
+                              <span>{store}</span>
                             </label>
                           ))}
                         </div>

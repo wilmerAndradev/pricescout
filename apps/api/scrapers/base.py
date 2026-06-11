@@ -101,10 +101,11 @@ class ScraperBase(ABC):
         """
         self.logger.info(f"Guardando {len(products)} productos en la base de datos...")
         now_iso = datetime.now(timezone.utc).isoformat()
+        from auth import execute_with_retry
         
         # Actualizar estado de sincronización de la tienda
         try:
-            db_client.table("stores").upsert({
+            execute_with_retry(db_client.table("stores").upsert({
                 "slug": self.store_slug,
                 "name": self.store_name,
                 "url": self.store_url,
@@ -113,16 +114,20 @@ class ScraperBase(ABC):
                 "active": True,
                 "last_sync_at": now_iso,
                 "last_sync_products_count": len(products)
-            }).execute()
+            }))
         except Exception as e:
             self.logger.error(f"No se pudo actualizar el estado de la tienda {self.store_slug}: {e}")
             result.errors.append(f"Store status update failed: {str(e)}")
 
-        # Upsert de cada producto e inserción de historial de precio
+        if not products:
+            return
+
+        from scrapers.normalizer import extract_volume_ml
+
+        # Preparar todos los prod_data
+        all_prod_data = []
         for prod in products:
             try:
-                from scrapers.normalizer import extract_volume_ml
-                
                 # Intentar obtener volumen de ml del producto
                 volume_ml = prod.raw_data.get("volume_ml")
                 if volume_ml is None and prod.variants:
@@ -145,47 +150,108 @@ class ScraperBase(ABC):
                     "sync_method": prod.sync_method,
                     "last_seen_at": now_iso
                 }
-                
-                # Realizar upsert en la tabla 'products'
-                upsert_res = db_client.table("products").upsert(
-                    prod_data,
-                    on_conflict="store_slug,title_normalized"
-                ).execute()
-                
-                if upsert_res.data:
-                    db_prod = upsert_res.data[0]
-                    product_id = db_prod.get("id")
-                    first_seen = db_prod.get("first_seen_at")
-                    
-                    # Calcular estadísticas (Creado vs Actualizado)
-                    is_new = False
-                    if first_seen:
-                        try:
-                            fs_dt = datetime.fromisoformat(first_seen.replace("Z", "+00:00"))
-                            now_dt = datetime.now(timezone.utc)
-                            if (now_dt - fs_dt).total_seconds() < 10:
-                                is_new = True
-                        except Exception:
-                            pass
-                            
-                    if is_new:
-                        result.added += 1
-                    else:
-                        result.updated += 1
-                        
-                    # Insertar en la tabla product_price_history
-                    db_client.table("product_price_history").insert({
-                        "product_id": product_id,
-                        "store_slug": prod.store_slug,
-                        "title_normalized": prod.title_normalized,
-                        "price": prod.price,
-                        "available": prod.available,
-                        "recorded_at": now_iso
-                    }).execute()
-                    
+                all_prod_data.append(prod_data)
             except Exception as e:
-                self.logger.error(f"Error al guardar producto '{prod.title}': {e}")
-                result.errors.append(f"Failed to save product '{prod.title}': {str(e)}")
+                self.logger.error(f"Error al preparar producto '{prod.title}': {e}")
+                result.errors.append(f"Failed to prepare product '{prod.title}': {str(e)}")
+
+        # Procesar en chunks de 100
+        chunk_size = 100
+        for i in range(0, len(all_prod_data), chunk_size):
+            chunk = all_prod_data[i:i + chunk_size]
+            try:
+                # Intentar upsert bulk con reintentos para evitar WSAEWOULDBLOCK
+                upsert_res = execute_with_retry(
+                    db_client.table("products").upsert(
+                        chunk,
+                        on_conflict="store_slug,title_normalized"
+                    )
+                )
+
+                if upsert_res.data:
+                    history_records = []
+                    for db_prod in upsert_res.data:
+                        product_id = db_prod.get("id")
+                        first_seen = db_prod.get("first_seen_at")
+                        
+                        # Calcular estadísticas (Creado vs Actualizado)
+                        is_new = False
+                        if first_seen:
+                            try:
+                                fs_dt = datetime.fromisoformat(first_seen.replace("Z", "+00:00"))
+                                now_dt = datetime.now(timezone.utc)
+                                if (now_dt - fs_dt).total_seconds() < 15:
+                                    is_new = True
+                            except Exception:
+                                pass
+                                
+                        if is_new:
+                            result.added += 1
+                        else:
+                            result.updated += 1
+                            
+                        # Preparar registro de historial
+                        history_records.append({
+                            "product_id": product_id,
+                            "store_slug": db_prod.get("store_slug"),
+                            "title_normalized": db_prod.get("title_normalized"),
+                            "price": db_prod.get("price"),
+                            "available": db_prod.get("available"),
+                            "recorded_at": now_iso
+                        })
+
+                    if history_records:
+                        try:
+                            execute_with_retry(db_client.table("product_price_history").insert(history_records))
+                        except Exception as e:
+                            self.logger.error(f"Error al insertar historial bulk en chunk {i//chunk_size}: {e}")
+                            result.errors.append(f"Bulk history insert failed for chunk: {str(e)}")
+
+            except Exception as e:
+                self.logger.warning(f"Upsert bulk fallido para chunk {i//chunk_size}, intentando individualmente. Error: {e}")
+                # Fallback: procesar uno por uno los productos del chunk
+                for prod_data in chunk:
+                    try:
+                        upsert_res = execute_with_retry(
+                            db_client.table("products").upsert(
+                                prod_data,
+                                on_conflict="store_slug,title_normalized"
+                            )
+                        )
+                        
+                        if upsert_res.data:
+                            db_prod = upsert_res.data[0]
+                            product_id = db_prod.get("id")
+                            first_seen = db_prod.get("first_seen_at")
+                            
+                            is_new = False
+                            if first_seen:
+                                try:
+                                    fs_dt = datetime.fromisoformat(first_seen.replace("Z", "+00:00"))
+                                    now_dt = datetime.now(timezone.utc)
+                                    if (now_dt - fs_dt).total_seconds() < 15:
+                                        is_new = True
+                                except Exception:
+                                    pass
+                                    
+                            if is_new:
+                                result.added += 1
+                            else:
+                                result.updated += 1
+                                
+                            execute_with_retry(
+                                db_client.table("product_price_history").insert({
+                                    "product_id": product_id,
+                                    "store_slug": prod_data["store_slug"],
+                                    "title_normalized": prod_data["title_normalized"],
+                                    "price": prod_data["price"],
+                                    "available": prod_data["available"],
+                                    "recorded_at": now_iso
+                                })
+                            )
+                    except Exception as ex:
+                        self.logger.error(f"Error de fallback al guardar producto '{prod_data.get('title')}': {ex}")
+                        result.errors.append(f"Failed to save product (fallback) '{prod_data.get('title')}': {str(ex)}")
 
 
 

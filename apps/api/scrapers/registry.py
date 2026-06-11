@@ -26,9 +26,9 @@ STORES: list[StoreConfig] = [
     StoreConfig(slug="perfumisimo", name="Perfumisimo", url="https://www.perfumisimo.cl", sync_method=SyncMethod.SHOPIFY_JSON),
     StoreConfig(slug="productos-de-lujo", name="Productos de Lujo", url="https://productosdelujo.cl", sync_method=SyncMethod.SHOPIFY_JSON),
 
-    # Shopify JSON adicionales (confirmar que soportan /products.json)
-    StoreConfig(slug="silk-perfumes", name="Silk Perfumes", url="https://silkperfumes.cl", sync_method=SyncMethod.SHOPIFY_JSON),
-    StoreConfig(slug="yauras", name="Yauras", url="https://yauras.cl", sync_method=SyncMethod.SHOPIFY_JSON),
+    # Shopify JS (fallback)
+    StoreConfig(slug="silk-perfumes", name="Silk Perfumes", url="https://silkperfumes.cl", sync_method=SyncMethod.SHOPIFY_JS),
+    StoreConfig(slug="yauras", name="Yauras", url="https://yauras.cl", sync_method=SyncMethod.SHOPIFY_JS),
 
     # HTML Parser (tiendas custom)
     StoreConfig(slug="alarab", name="Alarab", url="https://www.alarab.cl", sync_method=SyncMethod.HTML_PARSER, catalog_url="https://www.alarab.cl/collections/all"),

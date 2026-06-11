@@ -348,9 +348,31 @@ def run_autonomous_search(self, search_id: str):
             
         search_record = res.data[0]
         query = search_record["query"]
+        user_id = search_record.get("user_id")
+        environment_id = search_record.get("environment_id")
         
         # 1. Update status to processing
         execute_with_retry(supabase_writer.table("searches").update({"status": "processing"}).eq("id", search_id))
+        
+        # Get user plan limits and environment restrictions
+        from core.plans import get_user_plan_and_limits
+        plan_limits = get_user_plan_and_limits(user_id)
+        max_stores = plan_limits["stores_per_search"]
+        
+        allowed_domains = None
+        if environment_id:
+            try:
+                env_res = execute_with_retry(
+                    supabase_writer.table("environments")
+                    .select("store_domains, custom_domains")
+                    .eq("id", environment_id)
+                )
+                if env_res.data:
+                    store_domains = env_res.data[0].get("store_domains") or []
+                    custom_domains = env_res.data[0].get("custom_domains") or []
+                    allowed_domains = {d.strip().lower() for d in (store_domains + custom_domains) if d.strip()}
+            except Exception as env_err:
+                logger.error(f"Error fetching environment domains in search task: {env_err}")
         
         # 2. Inferencia de categoría rápida
         category = "perfumería"
@@ -417,6 +439,8 @@ def run_autonomous_search(self, search_id: str):
         }
         
         results_inserted = 0
+        inserted_store_domains = set()
+        
         for prod in products:
             raw_title = prod.get("title")
             
@@ -429,6 +453,18 @@ def run_autonomous_search(self, search_id: str):
             if not domain_name:
                 continue
             domain, name = domain_name
+            domain_lower = domain.strip().lower()
+            
+            # Restringir a los dominios del entorno si está configurado
+            if allowed_domains is not None and domain_lower not in allowed_domains:
+                continue
+                
+            # Validar límite de tiendas por búsqueda
+            if domain_lower not in inserted_store_domains:
+                if max_stores != -1 and len(inserted_store_domains) >= max_stores:
+                    # Se alcanzó el límite de tiendas para este plan, ignorar resultados de nuevos dominios
+                    continue
+                inserted_store_domains.add(domain_lower)
             
             # Limpiar el título y extraer los metadatos estructurados
             brand, clean_title, gender, vol, sku = parse_product_details(raw_title)

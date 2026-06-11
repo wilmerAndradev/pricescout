@@ -6,8 +6,26 @@ import json
 from datetime import datetime, timezone
 from scrapers.base import ScraperBase, ScrapedProduct
 from scrapers.normalizer import normalize_product_title
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception
 
 logger = logging.getLogger(__name__)
+
+def _is_retryable_status(exception):
+    if isinstance(exception, httpx.HTTPStatusError):
+        status_code = exception.response.status_code
+        return status_code == 429 or (500 <= status_code < 600)
+    return isinstance(exception, httpx.RequestError)
+
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=2, max=10),
+    retry=retry_if_exception(_is_retryable_status),
+    reraise=True
+)
+async def _get_with_retry(client: httpx.AsyncClient, url: str):
+    response = await client.get(url)
+    response.raise_for_status()
+    return response
 
 class ShopifyJsScraper(ScraperBase):
     """
@@ -33,37 +51,25 @@ class ShopifyJsScraper(ScraperBase):
                 url = f"{self.store_url}/collections/all/products.json?limit={limit}&page={page}"
                 self.logger.info(f"[ShopifyJS] Fetching collection page {page} from {self.store_name}...")
                 
-                retries = 3
-                success = False
-                response_data = None
-                
-                for attempt in range(1, retries + 1):
-                    try:
-                        response = await client.get(url)
-                        if response.status_code == 200:
-                            response_data = response.json()
-                            success = True
-                            break
-                        elif response.status_code == 404:
-                            self.logger.warning(f"Endpoint not found (404) for collections JSON. Triggering JS fallback.")
-                            use_js_fallback = True
-                            break
-                        elif response.status_code == 403 or response.status_code == 401:
-                            self.logger.warning(f"Access blocked ({response.status_code}). Triggering JS fallback.")
-                            use_js_fallback = True
-                            break
-                        else:
-                            wait_time = attempt * 2
-                            await asyncio.sleep(wait_time)
-                    except Exception as e:
-                        self.logger.warning(f"Request failed: {e}. Waiting...")
-                        await asyncio.sleep(attempt * 2)
-                        
-                if use_js_fallback:
+                try:
+                    response = await _get_with_retry(client, url)
+                    response_data = response.json()
+                except httpx.HTTPStatusError as exc:
+                    if exc.response.status_code in (404, 403, 401):
+                        self.logger.warning(f"Endpoint/access blocked ({exc.response.status_code}) for collections JSON. Triggering JS fallback.")
+                        use_js_fallback = True
+                        break
+                    else:
+                        self.logger.error(f"HTTP error {exc.response.status_code} fetching collection page {page}. Triggering JS fallback.")
+                        use_js_fallback = True
+                        break
+                except Exception as exc:
+                    self.logger.error(f"Failed to fetch collection page {page} after retries: {exc}. Triggering JS fallback.")
+                    use_js_fallback = True
                     break
-                    
-                if not success or not response_data or "products" not in response_data:
-                    self.logger.warning("Failed to fetch collections JSON. Triggering JS fallback.")
+                
+                if not response_data or "products" not in response_data:
+                    self.logger.warning("Invalid collection JSON response structure. Triggering JS fallback.")
                     use_js_fallback = True
                     break
                     

@@ -102,7 +102,7 @@ NUNCA commitear .env ni .env.local. Solo .env.example.
 | MA-05 | Dashboard analítico       | ⏳ Pendiente | Precios, mínimos/máximos, historial, gráficos            |
 | MA-06 | Sistema de alertas        | ⏳ Pendiente | Email + push al cambio de precio                         |
 | MA-07 | Autenticación             | ✅ Base      | Supabase Auth + Google OAuth + bypass email dev          |
-| MA-08 | Pagos Transbank           | ⏳ Pendiente | Webpay Plus, suscripciones recurrentes                   |
+| MA-08 | Pagos Transbank           | ✅ Completado | Webpay Plus, suscripciones recurrentes                   |
 | MA-09 | Modo Configurado empresas | ⏳ Pendiente | Pro/Business eligen tiendas a monitorear                 |
 | MA-10 | Exportaciones             | ⏳ Pendiente | CSV (Starter+), Excel/PDF (Pro+)                         |
 
@@ -176,22 +176,21 @@ NUNCA commitear .env ni .env.local. Solo .env.example.
 ### Completado ✅
 - Arquitectura base y SRS v4.0 definidos
 - Estructura de monorepo inicializada
-- docker-compose (FastAPI + Redis + Celery Worker) con Healthchecks y dependencias ordenadas
+- docker-compose (FastAPI + Redis + Celery Worker)
 - Migraciones Supabase base
 - Prompt del agente scraper documentado
 - Auth base (Supabase + Google OAuth)
-- Pipelines de CI/CD en GitHub Actions (`ci-cd.yml` y `e2e.yml`) completados
+- Pagos Transbank Webpay Plus (MA-08) y ciclo de vida de suscripciones
+- Motor A Scrapling para KNOWN_STORES (Estrategias Shopify JSON y Shopify JS completas y verificadas)
+- Motor B LLM Gemini/Groq (Estrategia HTML Parser con fallback a Groq completada y verificada)
 
 ### En progreso 🔄
-- Motor A Scrapling para KNOWN_STORES
-- Motor B LLM Gemini/Groq
 - Frontend buscador principal (MA-01)
 - Configuración de roles y middleware de protección de rutas (MA-07) [@auth]
 
 ### Pendiente ⏳
 - Dashboard analítico (MA-05)
 - Sistema de alertas email/push (MA-06)
-- Pagos Transbank Webpay Plus (MA-08)
 - Modo Configurado empresas (MA-09)
 - Exportaciones CSV/Excel/PDF (MA-10)
 - Tests unitarios y E2E (a ser implementados por @qa)

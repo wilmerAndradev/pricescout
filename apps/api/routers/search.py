@@ -6,7 +6,7 @@ listing store metadata, and managing Pro/Business environments.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 """
 
-from fastapi import APIRouter, HTTPException, Depends, Security, BackgroundTasks
+from fastapi import APIRouter, HTTPException, Depends, Security, BackgroundTasks, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from typing import List, Optional
@@ -50,7 +50,7 @@ class EnvironmentRequest(BaseModel):
 # ─── Endpoints: Search & Results ─────────────────────────────────────────────
 
 @router.post("", status_code=202)
-def initiate_search(request: SearchRequest, background_tasks: BackgroundTasks, user_id: Optional[str] = Depends(get_optional_current_user)):
+async def initiate_search(request: SearchRequest, fastapi_req: Request, background_tasks: BackgroundTasks, user_id: Optional[str] = Depends(get_optional_current_user)):
     """
     Initiates an autonomous product search by registering the search record
     in Supabase and queueing the Celery background master orchestrator task (or local fallback).
@@ -61,6 +61,70 @@ def initiate_search(request: SearchRequest, background_tasks: BackgroundTasks, u
         
     query_normalized = query_clean.lower()
     
+
+    # 1. Enforce monthly search limit and environment restrictions
+    from core.plans import check_monthly_search_limit, increment_monthly_search_count, get_user_plan_and_limits, supabase_admin
+    
+    client_ip = fastapi_req.client.host if fastapi_req.client else "127.0.0.1"
+    check_monthly_search_limit(user_id, client_ip)
+    
+    if request.environment_id:
+        plan_limits = get_user_plan_and_limits(user_id)
+        if not plan_limits["can_choose_stores"]:
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "detail": "Tu plan no permite el uso de entornos configurados (Modo Configurado)",
+                    "code": "PLAN_RESTRICTION"
+                }
+            )
+            
+        env_res = execute_with_retry(
+            supabase_admin.table("environments")
+            .select("*")
+            .eq("id", request.environment_id)
+        )
+        if not env_res.data:
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "detail": "Entorno configurado no encontrado",
+                    "code": "ENVIRONMENT_NOT_FOUND"
+                }
+            )
+            
+        env_record = env_res.data[0]
+        if env_record.get("user_id") != user_id:
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "detail": "No tienes acceso a este entorno configurado",
+                    "code": "PLAN_RESTRICTION"
+                }
+            )
+            
+        store_domains = env_record.get("store_domains") or []
+        custom_domains = env_record.get("custom_domains") or []
+        total_stores = len(store_domains) + len(custom_domains)
+        max_stores = plan_limits["stores_per_search"]
+        if max_stores != -1 and total_stores > max_stores:
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "detail": f"Tu plan permite un máximo de {max_stores} tiendas por búsqueda. Tu entorno tiene {total_stores}.",
+                    "code": "LIMIT_EXCEEDED"
+                }
+            )
+            
+        if len(custom_domains) > 0 and not plan_limits["can_add_custom_stores"]:
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "detail": "Tu plan no permite agregar tiendas personalizadas en entornos",
+                    "code": "PLAN_RESTRICTION"
+                }
+            )
+            
     try:
         from tasks.jobs import run_autonomous_search, supabase_writer
         from tasks.celery_app import check_celery_available
@@ -79,6 +143,9 @@ def initiate_search(request: SearchRequest, background_tasks: BackgroundTasks, u
             raise HTTPException(status_code=500, detail="Failed to initialize search record")
             
         search_id = res.data[0]["id"]
+        
+        # 2. Increment search count (only guest count is cached in Redis)
+        increment_monthly_search_count(user_id, client_ip)
         
         # 2. Trigger master task (Try Celery first, fallback to BackgroundTasks)
         if check_celery_available():
@@ -230,6 +297,39 @@ def list_environments(user_id: str = Depends(get_current_user)):
 @router.post("/environments", status_code=201)
 def create_environment(request: EnvironmentRequest, user_id: str = Depends(get_current_user)):
     """Creates a new search environment profile for custom targeting."""
+    from core.plans import get_user_plan_and_limits
+    plan_limits = get_user_plan_and_limits(user_id)
+    if not plan_limits["can_choose_stores"]:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "detail": "Tu plan no permite crear entornos configurados",
+                "code": "PLAN_RESTRICTION"
+            }
+        )
+        
+    store_domains = request.store_domains or []
+    custom_domains = request.custom_domains or []
+    total_stores = len(store_domains) + len(custom_domains)
+    max_stores = plan_limits["stores_per_search"]
+    if max_stores != -1 and total_stores > max_stores:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "detail": f"Tu plan permite un máximo de {max_stores} tiendas en el entorno. Intentaste agregar {total_stores}.",
+                "code": "LIMIT_EXCEEDED"
+            }
+        )
+        
+    if len(custom_domains) > 0 and not plan_limits["can_add_custom_stores"]:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "detail": "Tu plan no permite agregar tiendas personalizadas en entornos",
+                "code": "PLAN_RESTRICTION"
+            }
+        )
+
     try:
         from tasks.jobs import supabase_writer
         
@@ -253,6 +353,39 @@ def create_environment(request: EnvironmentRequest, user_id: str = Depends(get_c
 @router.put("/environments/{env_id}")
 def update_environment(env_id: str, request: EnvironmentRequest, user_id: str = Depends(get_current_user)):
     """Updates an existing environment."""
+    from core.plans import get_user_plan_and_limits
+    plan_limits = get_user_plan_and_limits(user_id)
+    if not plan_limits["can_choose_stores"]:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "detail": "Tu plan no permite modificar entornos configurados",
+                "code": "PLAN_RESTRICTION"
+            }
+        )
+        
+    store_domains = request.store_domains or []
+    custom_domains = request.custom_domains or []
+    total_stores = len(store_domains) + len(custom_domains)
+    max_stores = plan_limits["stores_per_search"]
+    if max_stores != -1 and total_stores > max_stores:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "detail": f"Tu plan permite un máximo de {max_stores} tiendas en el entorno. Intentaste agregar {total_stores}.",
+                "code": "LIMIT_EXCEEDED"
+            }
+        )
+        
+    if len(custom_domains) > 0 and not plan_limits["can_add_custom_stores"]:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "detail": "Tu plan no permite agregar tiendas personalizadas en entornos",
+                "code": "PLAN_RESTRICTION"
+            }
+        )
+
     try:
         from tasks.jobs import supabase_writer
         
