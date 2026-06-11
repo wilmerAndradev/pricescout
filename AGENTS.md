@@ -181,6 +181,8 @@ NUNCA commitear .env ni .env.local. Solo .env.example.
 - Prompt del agente scraper documentado
 - Auth base (Supabase + Google OAuth)
 - Pagos Transbank Webpay Plus (MA-08) y ciclo de vida de suscripciones
+- Validación de límites por plan (búsquedas, tiendas, entornos) en el backend (FastAPI)
+- Endpoints de creación y consulta de historial de proyectos (/projects)
 - Motor A Scrapling para KNOWN_STORES (Estrategias Shopify JSON y Shopify JS completas y verificadas)
 - Motor B LLM Gemini/Groq (Estrategia HTML Parser con fallback a Groq completada y verificada)
 

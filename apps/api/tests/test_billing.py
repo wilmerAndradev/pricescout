@@ -19,6 +19,7 @@ def mock_transbank():
 
 def test_get_user_subscription_and_plan_gratis_default(mock_supabase):
     from routers.billing import get_user_subscription_and_plan
+    from conftest import MockQueryBuilder
     # Setup mock to simulate no active subscription, returns Gratis plan
     def side_effect_table(table_name):
         if table_name == "subscriptions":
