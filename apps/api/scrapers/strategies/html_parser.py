@@ -48,9 +48,9 @@ class HtmlParserScraper(ScraperBase):
 
     async def fetch_products(self) -> list[ScrapedProduct]:
         scraped_products = []
-        current_url = await self._resolve_catalog_url()
+        resolved_url_str = await self._resolve_catalog_url()
         
-        if not current_url:
+        if not resolved_url_str:
             self.logger.error("No se pudo resolver una URL de catálogo válida para iniciar.")
             return scraped_products
 
@@ -60,144 +60,138 @@ class HtmlParserScraper(ScraperBase):
             self.logger.error("Scrapling no instalado. Abortando estrategia HTML Parser.")
             return scraped_products
 
-        page_count = 1
-        max_pages = 15  # Límite de seguridad para evitar loops infinitos y costos excesivos
-        
-        while current_url and page_count <= max_pages:
-            self.logger.info(f"Scraping catalog page {page_count} at: {current_url}")
+        # Si vienen múltiples URLs separadas por comas, procesar cada una secuencialmente
+        urls_to_process = [u.strip() for u in resolved_url_str.split(",") if u.strip()]
+        self.logger.info(f"URLs de catálogo a procesar secuencialmente: {urls_to_process}")
+
+        for start_url in urls_to_process:
+            self.logger.info(f"--- Iniciando extracción para URL base: {start_url} ---")
+            current_url = start_url
+            page_count = 1
+            max_pages = 10  # Límite por sección para evitar loops y consumo excesivo de tokens
             
-            # 1. Descargar HTML con StealthyFetcher (anti-Cloudflare)
-            html = None
-            try:
-                # Ejecutamos el fetch en un hilo para no bloquear el bucle de eventos
-                loop = asyncio.get_running_loop()
-                page = await loop.run_in_executor(
-                    None,
-                    lambda: StealthyFetcher.fetch(
-                        current_url,
-                        headless=True,
-                        solve_cloudflare=True,
-                        block_webrtc=True,
-                        hide_canvas=True,
-                        google_search=True,
-                        disable_resources=True,
-                        timeout=60000,
-                        wait=2000,
-                        locale="es-CL",
-                        timezone_id="America/Santiago"
-                    )
-                )
-                if page:
-                    if hasattr(page, 'body') and page.body:
-                        html = page.body.decode('utf-8', errors='ignore') if isinstance(page.body, bytes) else str(page.body)
-                    else:
-                        html = page.html if hasattr(page, 'html') else str(page)
-            except Exception as e:
-                self.logger.error(f"Error fetching URL {current_url}: {e}")
-                break
-
-            if not html or len(html) < 200:
-                self.logger.error(f"Obtained empty or invalid HTML from {current_url}")
-                break
-
-            # 2. Limpiar el HTML para reducir tokens (Trafilatura con fallback a BeautifulSoup estructurado)
-            cleaned_html = self._clean_html(html, current_url)
-
-            # 3. Extraer productos utilizando el LLM (Gemini con fallback a Groq)
-            extraction = await self._extract_with_llm(cleaned_html)
-            
-            if not extraction or "products" not in extraction:
-                self.logger.error(f"Failed to extract product list on page {page_count}.")
-                break
+            while current_url and page_count <= max_pages:
+                self.logger.info(f"Scraping catalog page {page_count} at: {current_url}")
                 
-            products = extraction["products"]
-            self.logger.info(f"Extracted {len(products)} products from page {page_count}.")
-            
-            for prod in products:
-                title = prod.get("title", "")
-                if not title:
-                    continue
-                    
-                prod_url = prod.get("url", "")
-                if prod_url:
-                    # Resolver URL relativa a absoluta
-                    prod_url = urljoin(current_url, prod_url)
-                else:
-                    prod_url = current_url
-                    
-                image_url = prod.get("image_url")
-                if image_url:
-                    image_url = urljoin(current_url, image_url)
-                    
+                # 1. Descargar HTML con StealthyFetcher (anti-Cloudflare)
+                html = None
                 try:
-                    price = float(prod.get("price") or 0)
-                except (ValueError, TypeError):
-                    price = 0.0
-                    
-                available = bool(prod.get("available", True))
-                
-                scraped_products.append(
-                    ScrapedProduct(
-                        store_slug=self.store_slug,
-                        store_name=self.store_name,
-                        store_url=self.store_url,
-                        title=title,
-                        title_normalized=normalize_product_title(title),
-                        price=price,
-                        currency="CLP",
-                        url=prod_url,
-                        image_url=image_url,
-                        available=available,
-                        variants=prod.get("variants") or [],
-                        raw_data=prod,
-                        scraped_at=datetime.now(timezone.utc),
-                        sync_method="html_parser"
+                    # Ejecutamos el fetch en un hilo para no bloquear el bucle de eventos
+                    loop = asyncio.get_running_loop()
+                    page = await loop.run_in_executor(
+                        None,
+                        lambda: StealthyFetcher.fetch(
+                            current_url,
+                            headless=True,
+                            solve_cloudflare=True,
+                            block_webrtc=True,
+                            hide_canvas=True,
+                            google_search=True,
+                            disable_resources=True,
+                            timeout=60000,
+                            wait=2000,
+                            locale="es-CL",
+                            timezone_id="America/Santiago"
+                        )
                     )
-                )
-
-            # 4. Determinar la siguiente página
-            next_page = extraction.get("next_page_url")
-            if next_page:
-                next_page_abs = urljoin(current_url, next_page)
-                # Evitar loops si la URL es la misma
-                if next_page_abs == current_url:
-                    self.logger.info("Next page URL is the same as current. Stopping.")
+                    if page:
+                        if hasattr(page, 'body') and page.body:
+                            html = page.body.decode('utf-8', errors='ignore') if isinstance(page.body, bytes) else str(page.body)
+                        else:
+                            html = page.html if hasattr(page, 'html') else str(page)
+                except Exception as e:
+                    self.logger.error(f"Error fetching URL {current_url}: {e}")
                     break
-                current_url = next_page_abs
-                page_count += 1
-                await self._request_delay()
-            else:
-                self.logger.info("No next page URL returned. Scraping completed.")
-                break
+
+                if not html or len(html) < 200:
+                    self.logger.error(f"Obtained empty or invalid HTML from {current_url}")
+                    break
+
+                # 2. Limpiar el HTML para reducir tokens (Trafilatura con fallback a BeautifulSoup estructurado)
+                cleaned_html = self._clean_html(html, current_url)
+
+                # 3. Extraer productos utilizando el LLM (Gemini con fallback a Groq)
+                extraction = await self._extract_with_llm(cleaned_html)
                 
+                if not extraction or "products" not in extraction:
+                    self.logger.error(f"Failed to extract product list on page {page_count}.")
+                    break
+                    
+                products = extraction["products"]
+                self.logger.info(f"Extracted {len(products)} products from page {page_count}.")
+                
+                for prod in products:
+                    title = prod.get("title", "")
+                    if not title:
+                        continue
+                        
+                    prod_url = prod.get("url", "")
+                    if prod_url:
+                        # Resolver URL relativa a absoluta
+                        prod_url = urljoin(current_url, prod_url)
+                    else:
+                        prod_url = current_url
+                        
+                    image_url = prod.get("image_url")
+                    if image_url:
+                        image_url = urljoin(current_url, image_url)
+                        
+                    try:
+                        price = float(prod.get("price") or 0)
+                    except (ValueError, TypeError):
+                        price = 0.0
+                        
+                    available = bool(prod.get("available", True))
+                    
+                    scraped_products.append(
+                        ScrapedProduct(
+                            store_slug=self.store_slug,
+                            store_name=self.store_name,
+                            store_url=self.store_url,
+                            title=title,
+                            title_normalized=normalize_product_title(title),
+                            price=price,
+                            currency="CLP",
+                            url=prod_url,
+                            image_url=image_url,
+                            available=available,
+                            variants=prod.get("variants") or [],
+                            raw_data=prod,
+                            scraped_at=datetime.now(timezone.utc),
+                            sync_method="html_parser"
+                        )
+                    )
+
+                # 4. Determinar la siguiente página
+                next_page = extraction.get("next_page_url")
+                if next_page:
+                    next_page_abs = urljoin(current_url, next_page)
+                    # Evitar loops si la URL es la misma o coincide con alguna base
+                    if next_page_abs == current_url or next_page_abs in urls_to_process:
+                        self.logger.info("Next page URL is the same or a base URL. Stopping category.")
+                        break
+                    current_url = next_page_abs
+                    page_count += 1
+                    await self._request_delay()
+                else:
+                    self.logger.info("No next page URL returned. Category completed.")
+                    break
+                    
         return scraped_products
 
     def _clean_html(self, html: str, url: str) -> str:
-        """Limpia el HTML usando Trafilatura conservando links, y BeautifulSoup como fallback."""
-        try:
-            import trafilatura
-            # Extraer en formato markdown para mantener enlaces e imágenes
-            cleaned = trafilatura.extract(
-                html,
-                url=url,
-                include_links=True,
-                include_comments=False,
-                output_format="markdown"
-            )
-            if cleaned and len(cleaned) > 200:
-                # Cortar para evitar desbordar tokens
-                return cleaned[:30000]
-        except Exception as e:
-            self.logger.warning(f"Trafilatura failed to clean catalog page: {e}")
-
-        # Fallback: BeautifulSoup estructurado y limpio de código
+        """
+        Limpia el HTML preservando la estructura del catálogo (grillas de productos).
+        Prioriza BeautifulSoup estructurado y limpio para e-commerce, con fallback a Trafilatura/truncado.
+        """
+        # 1. BeautifulSoup estructurado (óptimo para e-commerce)
         from bs4 import BeautifulSoup
         try:
             soup = BeautifulSoup(html, "html.parser")
-            # Decomponer scripts y estilos molestos
+            # Decomponer scripts, estilos y elementos de navegación molestos
             for tag in soup(["script", "style", "noscript", "svg", "header", "footer", "nav", "iframe", "aside"]):
                 tag.decompose()
-            # Limpiar atributos innecesarios de las etiquetas
+            # Limpiar atributos innecesarios de las etiquetas para ahorrar tokens
             for tag in soup.find_all(True):
                 attrs = {}
                 if tag.name == "a" and "href" in tag.attrs:
@@ -207,17 +201,40 @@ class HtmlParserScraper(ScraperBase):
                     if src:
                         attrs["src"] = src
                 tag.attrs = attrs
-            return str(soup)[:30000]
-        except Exception as e:
-            self.logger.error(f"BeautifulSoup fallback failed: {e}")
             
-        return html[:20000]
+            cleaned_soup = str(soup)
+            if len(cleaned_soup) > 200:
+                # 150k caracteres caben holgadamente en Gemini 2.5 y evitan truncar paginación
+                return cleaned_soup[:150000]
+        except Exception as e:
+            self.logger.warning(f"BeautifulSoup cleaning failed: {e}")
+
+        # 2. Fallback a Trafilatura
+        try:
+            import trafilatura
+            cleaned = trafilatura.extract(
+                html,
+                url=url,
+                include_links=True,
+                include_comments=False,
+                output_format="markdown"
+            )
+            if cleaned and len(cleaned) > 200:
+                return cleaned[:100000]
+        except Exception as e:
+            self.logger.warning(f"Trafilatura fallback failed: {e}")
+            
+        return html[:100000]
 
     async def _resolve_catalog_url(self) -> str | None:
         """
         Prueba diferentes rutas comunes si catalog_url no es válida.
         Las prueba en orden: catalog_url, /catalogo, /productos, /tienda, /shop, /collections/all
         """
+        if self.catalog_url and "," in self.catalog_url:
+            self.logger.info(f"Configuración de categorías múltiples detectada: {self.catalog_url}")
+            return self.catalog_url
+
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         }
@@ -275,12 +292,29 @@ class HtmlParserScraper(ScraperBase):
                                 "max_output_tokens": 8000,
                             }
                         )
-                        # Ejecutar en hilo
-                        loop = asyncio.get_running_loop()
-                        response = await loop.run_in_executor(None, lambda: model.generate_content(prompt))
-                        if response and response.text:
-                            data = json.loads(response.text)
-                            self.logger.info(f"Successfully extracted data with Gemini ({name})")
+                        
+                        max_retries = 3
+                        for attempt in range(max_retries):
+                            try:
+                                # Ejecutar en hilo
+                                loop = asyncio.get_running_loop()
+                                response = await loop.run_in_executor(None, lambda: model.generate_content(prompt))
+                                if response and response.text:
+                                    data = json.loads(response.text)
+                                    self.logger.info(f"Successfully extracted data with Gemini ({name})")
+                                    break
+                            except Exception as api_err:
+                                err_str = str(api_err)
+                                if ("429" in err_str or "quota" in err_str.lower() or "limit" in err_str.lower()) and attempt < max_retries - 1:
+                                    import re
+                                    match = re.search(r"Please retry in (\d+(?:\.\d+)?)s", err_str)
+                                    wait_time = float(match.group(1)) + 2.0 if match else 20.0
+                                    self.logger.warning(f"Límite de cuota Gemini (429). Esperando {wait_time:.1f} segundos para reintentar... (Intento {attempt+1}/{max_retries})")
+                                    await asyncio.sleep(wait_time)
+                                    continue
+                                raise api_err
+                        
+                        if data:
                             break
                     except Exception as model_err:
                         self.logger.warning(f"Gemini model {name} failed: {model_err}")

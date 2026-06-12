@@ -31,10 +31,10 @@ STORES: list[StoreConfig] = [
     StoreConfig(slug="yauras", name="Yauras", url="https://yauras.cl", sync_method=SyncMethod.SHOPIFY_JS),
 
     # HTML Parser (tiendas custom)
-    StoreConfig(slug="alarab", name="Alarab", url="https://www.alarab.cl", sync_method=SyncMethod.HTML_PARSER, catalog_url="https://www.alarab.cl/collections/all"),
+    StoreConfig(slug="alarab", name="Alarab", url="https://www.alarab.cl", sync_method=SyncMethod.HTML_PARSER, catalog_url="https://www.alarab.cl/marcas"),
     StoreConfig(slug="alisha", name="Alisha Perfumes", url="https://alishaperfumes.cl", sync_method=SyncMethod.HTML_PARSER, catalog_url="https://alishaperfumes.cl/productos"),
-    StoreConfig(slug="paris-perfumes", name="ParisPerfumes", url="https://www.parisperfumes.cl", sync_method=SyncMethod.HTML_PARSER, catalog_url="https://www.parisperfumes.cl/tienda"),
-    StoreConfig(slug="sairam", name="Sairam", url="https://sairam.cl", sync_method=SyncMethod.HTML_PARSER, catalog_url="https://sairam.cl/catalogo"),
+    StoreConfig(slug="paris-perfumes", name="ParisPerfumes", url="https://www.parisperfumes.cl", sync_method=SyncMethod.HTML_PARSER, catalog_url="https://www.parisperfumes.cl/perfumes-1,https://www.parisperfumes.cl/ofertas"),
+    StoreConfig(slug="sairam", name="Sairam", url="https://sairam.cl", sync_method=SyncMethod.HTML_PARSER, catalog_url="https://sairam.cl/perfumes-de-hombre,https://sairam.cl/perfumes-de-mujer,https://sairam.cl/perfumes-unisex,https://sairam.cl/perfume/perfumes-arabes"),
     StoreConfig(slug="joy-perfumes", name="JoyPerfumes", url="https://joyperfumes.cl", sync_method=SyncMethod.HTML_PARSER, catalog_url="https://joyperfumes.cl/productos"),
 ]
 
