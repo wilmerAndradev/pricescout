@@ -127,7 +127,8 @@ NUNCA commitear .env ni .env.local. Solo .env.example.
 
 ### Git y checkpoint
 - Rama principal: main.
-- Cuando el usuario escriba "checkpoint":
+- **NUNCA realizar commits ni pushes de forma automática**. El usuario debe solicitarlo textualmente (por ejemplo, escribiendo "checkpoint" o pidiéndolo de forma explícita).
+- Cuando el usuario solicite textualmente un commit/checkpoint:
   1. Ejecutar `git status`
   2. Si no hay cambios: "nothing to commit — working tree clean"
   3. Si hay cambios: `git add -A` → generar commit message Conventional Commits → `git push origin main`
@@ -185,6 +186,8 @@ NUNCA commitear .env ni .env.local. Solo .env.example.
 - Endpoints de creación y consulta de historial de proyectos (/projects)
 - Motor A Scrapling para KNOWN_STORES (Estrategias Shopify JSON y Shopify JS completas y verificadas)
 - Motor B LLM Gemini/Groq (Estrategia HTML Parser con fallback a Groq completada y verificada)
+- Optimización y corrección de la extracción masiva de tiendas en cero (Estrategia HTML Parser + Gemini con paginación y reintentos dinámicos ante 429)
+- Tests unitarios y E2E para Backend (pytest) y Frontend (Vitest + Playwright) (MA-07)
 
 ### En progreso 🔄
 - Frontend buscador principal (MA-01)
@@ -195,7 +198,6 @@ NUNCA commitear .env ni .env.local. Solo .env.example.
 - Sistema de alertas email/push (MA-06)
 - Modo Configurado empresas (MA-09)
 - Exportaciones CSV/Excel/PDF (MA-10)
-- Tests unitarios y E2E (a ser implementados por @qa)
 - Documentación de API pública (plan Business)
 
 ---
