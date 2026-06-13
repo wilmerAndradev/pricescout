@@ -26,18 +26,27 @@ El JSON debe tener esta estructura exacta:
       "url": "URL absoluta del producto o ruta relativa",
       "image_url": "URL de la imagen principal o null",
       "available": true,
-      "variants": []
+      "variants": [],
+      "is_dupe": false,
+      "dupe_of": null
     }}
   ],
   "next_page_url": "URL de la siguiente página o null si es la última"
 }}
 
-Si el precio tiene puntos de miles (29.990), conviértelo a número entero (29990).
-Si no puedes extraer un campo, usa null.
+Reglas:
+- Si el precio tiene puntos de miles (29.990), conviértelo a número entero (29990).
+- Si no puedes extraer un campo, usa null.
+- "is_dupe": true si el nombre indica que es una inspiración, dupe, o versión árabe 
+  de otro perfume. Palabras que lo indican: inspirado en, dupe, tipo, estilo, attar, 
+  aceite árabe, inspired by, impression of, our version of, compare to, al estilo de.
+- "dupe_of": si is_dupe es true, extraer el nombre del perfume original al que hace 
+  referencia. Ejemplo: "Inspirado en Chanel N5" → dupe_of: "Chanel N5".
 
 HTML:
 {html}
 """
+
 
 class HtmlParserScraper(ScraperBase):
     """

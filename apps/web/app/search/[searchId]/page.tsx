@@ -4,9 +4,9 @@ import * as React from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { 
-  ArrowLeft, Search, Loader2, Sparkles, Check, 
-  ExternalLink, BarChart3, AlertCircle, ShoppingBag, 
-  ChevronRight, RefreshCw, X, ShieldAlert, Award, LogOut, Bell
+  ArrowRight, Search, Loader2, Sparkles, Check, 
+  ExternalLink, ShoppingBag, 
+  X, ShieldAlert, Award, LogOut, Bell
 } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
@@ -249,6 +249,17 @@ export default function SearchResultsPage() {
   const [user, setUser] = React.useState<any>(null);
   const [profile, setProfile] = React.useState<any>(null);
   const [highlightedProductId, setHighlightedProductId] = React.useState<string | null>(null);
+  const [searchInput, setSearchInput] = React.useState("");
+  const [isSearching, setIsSearching] = React.useState(false);
+  const [showLimitModal, setShowLimitModal] = React.useState(false);
+  const [guestSearchCount, setGuestSearchCount] = React.useState(0);
+
+  const [prevSearchId, setPrevSearchId] = React.useState(searchId);
+  if (searchId !== prevSearchId) {
+    setPrevSearchId(searchId);
+    setSearchInput("");
+    setIsSearching(false);
+  }
 
   const scrollToCheapestProduct = () => {
     if (!results || results.length === 0) return;
@@ -454,6 +465,34 @@ export default function SearchResultsPage() {
   // Poll intervals
   const pollIntervalRef = React.useRef<any>(null);
 
+  const fetchResults = React.useCallback(async () => {
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
+      const response = await fetch(`${apiUrl}/search/${searchId}/results`);
+      if (!response.ok) {
+        throw new Error("Failed to fetch results");
+      }
+      
+      const data = await response.json();
+      setQuery(data.query || "");
+      setSearchInput(prev => prev || data.query || "");
+      setStatus(data.status || "pending");
+      setCategory(data.category_inferred || "");
+      setResults(data.results || []);
+      setKpis(data.kpis || { min_price: 0, max_price: 0, avg_price: 0, stores_found: 0 });
+      setAiInsight(data.ai_insight);
+      
+      if (data.status === "completed" || data.status === "failed") {
+        if (pollIntervalRef.current) {
+          clearInterval(pollIntervalRef.current);
+          pollIntervalRef.current = null;
+        }
+      }
+    } catch (err) {
+      console.warn("Polling error:", err);
+    }
+  }, [searchId]);
+
   React.useEffect(() => {
     // Check if user is logged in
     const checkUser = async () => {
@@ -473,41 +512,22 @@ export default function SearchResultsPage() {
     };
     checkUser();
     
+    // Retrieve search count from localStorage
+    const count = parseInt(localStorage.getItem("pricescout_guest_searches") || "0", 10);
+    setTimeout(() => {
+      setGuestSearchCount(count);
+    }, 0);
+    
     // Start polling search results
-    fetchResults();
+    setTimeout(() => {
+      fetchResults();
+    }, 0);
     pollIntervalRef.current = setInterval(fetchResults, 1800);
     
     return () => {
       if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
     };
-  }, [searchId]);
-
-  const fetchResults = async () => {
-    try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
-      const response = await fetch(`${apiUrl}/search/${searchId}/results`);
-      if (!response.ok) {
-        throw new Error("Failed to fetch results");
-      }
-      
-      const data = await response.json();
-      setQuery(data.query || "");
-      setStatus(data.status || "pending");
-      setCategory(data.category_inferred || "");
-      setResults(data.results || []);
-      setKpis(data.kpis || { min_price: 0, max_price: 0, avg_price: 0, stores_found: 0 });
-      setAiInsight(data.ai_insight);
-      
-      if (data.status === "completed" || data.status === "failed") {
-        if (pollIntervalRef.current) {
-          clearInterval(pollIntervalRef.current);
-          pollIntervalRef.current = null;
-        }
-      }
-    } catch (err) {
-      console.warn("Polling error:", err);
-    }
-  };
+  }, [searchId, fetchResults]);
 
   const handleLogout = async () => {
     const supabase = createClient();
@@ -516,6 +536,61 @@ export default function SearchResultsPage() {
     setUser(null);
     setProfile(null);
     router.push("/");
+  };
+
+  const handleNewSearch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!searchInput.trim()) {
+      toast.error("Por favor, ingresa el nombre de un producto");
+      return;
+    }
+
+    const searchQuery = searchInput.trim();
+
+    // If the user is a guest, enforce the 5 searches limit
+    if (!user) {
+      const currentCount = parseInt(localStorage.getItem("pricescout_guest_searches") || "0", 10);
+      if (currentCount >= 5) {
+        setShowLimitModal(true);
+        return;
+      }
+    }
+
+    setIsSearching(true);
+    const toastId = toast.loading("Iniciando búsqueda inteligente...");
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
+      const response = await fetch(`${apiUrl}/search`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ query: searchQuery })
+      });
+
+      if (!response.ok) {
+        throw new Error("Error de conexión con el motor de scraping");
+      }
+
+      const data = await response.json();
+      
+      if (data.search_id) {
+        // Increment search count if anonymous
+        if (!user) {
+          const nextCount = guestSearchCount + 1;
+          localStorage.setItem("pricescout_guest_searches", nextCount.toString());
+          setGuestSearchCount(nextCount);
+        }
+
+        toast.success("Búsqueda en curso", { id: toastId });
+        router.push(`/search/${data.search_id}`);
+      } else {
+        throw new Error("ID de búsqueda no recibido");
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Error al conectar con la API de búsqueda", { id: toastId });
+      setIsSearching(false);
+    }
   };
 
   const handleSaveProject = async () => {
@@ -656,15 +731,55 @@ export default function SearchResultsPage() {
       <main className="flex-1 py-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="max-w-6xl mx-auto">
-            {/* ── Breadcrumb ── */}
-            <div className="mb-8">
-              <Link 
-                href={user ? "/dashboard" : "/"} 
-                className="inline-flex items-center gap-2 text-sm font-semibold text-[var(--color-slate-500)] hover:text-[var(--color-primary-600)] transition-colors"
-              >
-                <ArrowLeft size={16} />
-                Volver al buscador
-              </Link>
+            {/* ── Redesigned Search / Navigation Area ── */}
+            <div className="mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <form onSubmit={handleNewSearch} className="flex-1 flex gap-2 max-w-2xl bg-white p-1.5 rounded-xl border border-[var(--color-slate-200)] shadow-[var(--shadow-sm)] focus-within:ring-2 focus-within:ring-[var(--color-primary-100)] focus-within:border-[var(--color-primary-600)] transition-all">
+                <div className="flex-1 flex items-center gap-2 px-2">
+                  <Search size={18} className="text-[var(--color-slate-400)] flex-shrink-0" />
+                  <input 
+                    type="text"
+                    value={searchInput}
+                    onChange={(e) => setSearchInput(e.target.value)}
+                    placeholder="Buscar otro producto... Ej: Lattafa Yara, Nike Air Max..."
+                    className="w-full bg-transparent border-0 outline-none text-[var(--color-slate-900)] font-body text-sm placeholder-[var(--color-slate-400)] h-9 focus:ring-0 focus:outline-none"
+                    disabled={isSearching}
+                  />
+                  {searchInput && (
+                    <button
+                      type="button"
+                      onClick={() => setSearchInput("")}
+                      className="text-[var(--color-slate-400)] hover:text-[var(--color-slate-600)] p-1 cursor-pointer"
+                    >
+                      <X size={16} />
+                    </button>
+                  )}
+                </div>
+                <button 
+                  type="submit"
+                  disabled={isSearching}
+                  className="px-5 py-2 bg-[var(--color-primary-600)] hover:bg-[var(--color-primary-700)] text-white text-xs font-bold rounded-lg flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-[var(--shadow-sm)] hover:shadow-md whitespace-nowrap disabled:opacity-50"
+                >
+                  {isSearching ? (
+                    <>
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      <span>Buscando...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>Buscar</span>
+                      <ArrowRight size={14} />
+                    </>
+                  )}
+                </button>
+              </form>
+
+              {/* Guest Search Limit Indicator */}
+              {!user && (
+                <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-[var(--color-slate-100)] rounded-full text-xs font-semibold text-[var(--color-slate-500)] border border-[var(--color-slate-200)] h-fit w-fit">
+                  <span>Restantes:</span>
+                  <span className="font-extrabold text-[var(--color-primary-600)]">{Math.max(0, 5 - guestSearchCount)} de 5</span>
+                </div>
+              )}
             </div>
 
             {/* ── Header ── */}
@@ -672,7 +787,7 @@ export default function SearchResultsPage() {
               <div>
                 <div className="flex items-center gap-3 mb-2 flex-wrap">
                   <h1 className="font-display text-3xl font-extrabold text-[var(--color-slate-900)] tracking-tight">
-                    Resultados para: <span className="text-[var(--color-primary-600)]">"{query || "Buscando..."}"</span>
+                    Resultados para: <span className="text-[var(--color-primary-600)]">&quot;{query || "Buscando..."}&quot;</span>
                   </h1>
                   {category && (
                     <span className="px-3 py-1 bg-[var(--color-primary-50)] text-[var(--color-primary-600)] text-xs font-semibold rounded-full border border-[var(--color-primary-100)] uppercase tracking-wider">
@@ -1231,6 +1346,47 @@ export default function SearchResultsPage() {
                 className="w-full py-3.5 bg-[var(--color-slate-100)] hover:bg-[var(--color-slate-200)] text-[var(--color-slate-700)] font-bold text-center rounded-xl text-sm transition-colors cursor-pointer"
               >
                 Tengo Cuenta (Iniciar Sesión)
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Register Limit Modal for Guest Users ── */}
+      {showLimitModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-6 animate-fade-in">
+          <div className="bg-white rounded-2xl border border-[var(--color-slate-200)] max-w-md w-full p-8 shadow-[var(--shadow-lg)] relative flex flex-col gap-6">
+            <button 
+              onClick={() => setShowLimitModal(false)}
+              className="absolute top-4 right-4 text-[var(--color-slate-400)] hover:text-[var(--color-slate-600)] cursor-pointer"
+            >
+              <X size={20} />
+            </button>
+
+            <div className="text-center space-y-3">
+              <div className="w-12 h-12 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center mx-auto">
+                <ShieldAlert size={24} />
+              </div>
+              <h3 className="font-display font-extrabold text-2xl text-[var(--color-slate-900)]">
+                Límite de Invitado Alcanzado
+              </h3>
+              <p className="text-sm text-[var(--color-slate-500)] font-body leading-relaxed">
+                Has alcanzado tu límite de **5 búsquedas gratuitas** como invitado. ¡Registra tu cuenta gratis en menos de 30 segundos para desbloquear búsquedas ilimitadas, alertas de precio e histórico completo!
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-3">
+              <Link 
+                href="/register" 
+                className="w-full py-3.5 bg-[var(--color-primary-600)] hover:bg-[var(--color-primary-700)] text-white font-bold text-center rounded-xl text-sm transition-all shadow hover:shadow-md cursor-pointer"
+              >
+                Crear Mi Cuenta Gratis
+              </Link>
+              <Link 
+                href="/login" 
+                className="w-full py-3.5 bg-[var(--color-slate-100)] hover:bg-[var(--color-slate-200)] text-[var(--color-slate-700)] font-bold text-center rounded-xl text-sm transition-colors cursor-pointer"
+              >
+                Ya tengo cuenta (Iniciar Sesión)
               </Link>
             </div>
           </div>

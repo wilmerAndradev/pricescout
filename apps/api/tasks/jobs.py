@@ -3,6 +3,8 @@ import os
 from tasks.celery_app import app
 from supabase import create_client, Client
 from auth import execute_with_retry
+from scrapers.matcher import score_match
+from scrapers.normalizer import is_dupe_product
 
 logger = logging.getLogger(__name__)
 
@@ -309,28 +311,6 @@ def parse_product_details(raw_title: str) -> tuple[str, str, str, str, str]:
         
     return detected_brand, clean, gender, volume, sku
 
-def is_valid_match(query: str, title: str) -> bool:
-    """
-    Evita colisiones falsas como Eau Sauvage vs Sauvage.
-    Limpia signos de puntuación antes de tokenizar.
-    """
-    q_clean = re.sub(r'[^\w\s]', ' ', query.lower())
-    t_clean = re.sub(r'[^\w\s]', ' ', title.lower())
-    q_words = set(q_clean.split())
-    t_words = set(t_clean.split())
-    
-    # Caso específico: Eau Sauvage vs Sauvage
-    if "sauvage" in q_words and "sauvage" in t_words:
-        q_has_eau = "eau" in q_words
-        t_has_eau = "eau" in t_words
-        if t_has_eau and not q_has_eau:
-            return False
-        if q_has_eau and not t_has_eau:
-            return False
-            
-    return True
-
-
 @app.task(bind=True)
 def run_autonomous_search(self, search_id: str):
     """
@@ -442,11 +422,18 @@ def run_autonomous_search(self, search_id: str):
         inserted_store_domains = set()
         
         for prod in products:
-            raw_title = prod.get("title")
+            raw_title = prod.get("title") or ""
             
-            # Validar si el producto colisiona (ej: Eau Sauvage vs Sauvage)
-            if not is_valid_match(query, raw_title):
-                continue
+            # Use continuous scoring matching engine
+            score = score_match(query, raw_title)
+            is_dupe = is_dupe_product(raw_title)
+            
+            if is_dupe:
+                if score < 0.25:
+                    continue
+            else:
+                if score < 0.80:
+                    continue
                 
             slug = prod.get("store_slug")
             domain_name = SLUG_TO_DOMAIN_AND_NAME.get(slug)

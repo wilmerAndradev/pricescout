@@ -56,6 +56,11 @@ app.add_middleware(
 def read_root(request: Request):
     return {"status": "ok", "service": "PriceScout API"}
 
+# Health check endpoint for Docker container / load balancer health checks
+@app.get("/health")
+def health_check():
+    return {"status": "ok", "service": "PriceScout API"}
+
 # Include routers
 app.include_router(jobs.router, prefix="/api/v1")
 app.include_router(search.router, prefix="/api/v1")
