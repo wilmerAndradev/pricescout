@@ -27,6 +27,7 @@ const KNOWN_STORES = [
 export default function EnvironmentsPage() {
   const [environments, setEnvironments] = React.useState<any[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
+  const [canAddCustomStores, setCanAddCustomStores] = React.useState(false);
   
   // Form State
   const [isSaving, setIsSaving] = React.useState(false);
@@ -36,17 +37,38 @@ export default function EnvironmentsPage() {
   const [activeStores, setActiveStores] = React.useState<string[]>([]);
   const [customDomainsInput, setCustomDomainsInput] = React.useState("");
 
-  React.useEffect(() => {
-    fetchEnvironments();
-  }, []);
+  const selectEnvironment = (env: any) => {
+    setSelectedEnv(env);
+    setName(env.name);
+    setMode(env.mode);
+    setActiveStores(env.store_domains || []);
+    setCustomDomainsInput((env.custom_domains || []).join(", "));
+  };
 
-  const fetchEnvironments = async () => {
+  async function fetchEnvironments() {
     setIsLoading(true);
     try {
       const supabase = createClient();
       const { data: { session } } = await supabase.auth.getSession();
       
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
+      
+      // Fetch billing status to verify limits
+      try {
+        const billingRes = await fetch(`${apiUrl}/billing/status`, {
+          headers: {
+            "Authorization": `Bearer ${session?.access_token}`
+          }
+        });
+        if (billingRes.ok) {
+          const billingData = await billingRes.json();
+          const planId = billingData.plan?.id?.toLowerCase() || "";
+          setCanAddCustomStores(planId.includes("business"));
+        }
+      } catch (e) {
+        console.error("Could not fetch billing limits:", e);
+      }
+
       const response = await fetch(`${apiUrl}/search/environments`, {
         headers: {
           "Authorization": `Bearer ${session?.access_token}`
@@ -65,15 +87,13 @@ export default function EnvironmentsPage() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }
 
-  const selectEnvironment = (env: any) => {
-    setSelectedEnv(env);
-    setName(env.name);
-    setMode(env.mode);
-    setActiveStores(env.store_domains || []);
-    setCustomDomainsInput((env.custom_domains || []).join(", "));
-  };
+  React.useEffect(() => {
+    setTimeout(() => {
+      fetchEnvironments();
+    }, 0);
+  }, []);
 
   const handleCreateNew = () => {
     setSelectedEnv(null);
@@ -367,27 +387,51 @@ export default function EnvironmentsPage() {
                 </div>
 
                 {/* 4. Custom domains for Business Plan */}
-                <div className="space-y-2 pt-4 border-t border-[var(--color-slate-100)]">
-                  <div className="flex items-center justify-between flex-wrap gap-2">
-                    <label className="block text-sm font-bold text-[var(--color-slate-700)] flex items-center gap-1.5">
-                      Tiendas Personalizadas Adicionales (Exclusivo Business)
-                    </label>
-                    <span className="px-2 py-0.5 bg-purple-100 text-purple-700 text-[10px] font-bold rounded-full uppercase tracking-wider">
-                      Business
-                    </span>
-                  </div>
-                  <p className="text-xs text-[var(--color-slate-400)] leading-relaxed font-body mb-3">
-                    Ingresa los dominios de cualquier sitio e-commerce que NO esté en el catálogo principal, separados por coma (ej: `eliteperfumes.cl, aromas.cl`). Nuestro motor de IA se encargará de extraer la información de forma universal.
-                  </p>
-                  <input
-                    type="text"
-                    value={customDomainsInput}
-                    onChange={(e) => setCustomDomainsInput(e.target.value)}
-                    placeholder="ejemplo.cl, mi-competencia.cl..."
-                    className="w-full h-11 px-4 bg-[var(--color-slate-50)] border border-[var(--color-slate-200)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--color-primary-100)] text-sm"
-                    disabled={isSaving}
-                  />
-                </div>
+                 <div className="space-y-2 pt-4 border-t border-[var(--color-slate-100)]">
+                   <div className="flex items-center justify-between flex-wrap gap-2">
+                     <label className="block text-sm font-bold text-[var(--color-slate-700)] flex items-center gap-1.5">
+                       Tiendas Personalizadas Adicionales (Exclusivo Business)
+                     </label>
+                     <span className="px-2 py-0.5 bg-purple-100 text-purple-700 text-[10px] font-bold rounded-full uppercase tracking-wider animate-pulse">
+                       Business
+                     </span>
+                   </div>
+                   <p className="text-xs text-[var(--color-slate-400)] leading-relaxed font-body mb-3">
+                     Ingresa los dominios de cualquier sitio e-commerce que NO esté en el catálogo principal, separados por coma (ej: `eliteperfumes.cl, aromas.cl`). Nuestro motor de IA se encargará de extraer la información de forma universal.
+                   </p>
+                   
+                   {!canAddCustomStores ? (
+                     <div className="bg-purple-50/50 border border-purple-100 rounded-xl p-4 space-y-3">
+                       <input
+                         type="text"
+                         value=""
+                         placeholder="ejemplo.cl, mi-competencia.cl..."
+                         className="w-full h-11 px-4 bg-[var(--color-slate-100)] border border-[var(--color-slate-200)] rounded-xl focus:outline-none text-sm text-[var(--color-slate-400)] cursor-not-allowed"
+                         disabled={true}
+                       />
+                       <div className="flex items-center justify-between flex-wrap gap-2 text-xs">
+                         <span className="text-purple-700 font-semibold font-body">
+                           ✨ Requiere el plan Business para añadir tiendas ilimitadas.
+                         </span>
+                         <Link
+                           href="/dashboard/billing"
+                           className="text-purple-700 font-bold hover:text-purple-900 underline font-body transition-colors"
+                         >
+                           Actualizar Plan &rarr;
+                         </Link>
+                       </div>
+                     </div>
+                   ) : (
+                     <input
+                       type="text"
+                       value={customDomainsInput}
+                       onChange={(e) => setCustomDomainsInput(e.target.value)}
+                       placeholder="ejemplo.cl, mi-competencia.cl..."
+                       className="w-full h-11 px-4 bg-[var(--color-slate-50)] border border-[var(--color-slate-200)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--color-primary-100)] text-sm"
+                       disabled={isSaving}
+                     />
+                   )}
+                 </div>
               </div>
 
               {/* Bottom Actions */}

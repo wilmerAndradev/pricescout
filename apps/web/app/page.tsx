@@ -6,6 +6,8 @@ import Link from "next/link";
 import { Search, Sparkles, Check, ArrowRight, ShieldCheck, Zap, Globe, BarChart3, Bell, X, ShoppingBag, Tag } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
+import { Header } from "@/components/organisms/header";
+import { Footer } from "@/components/organisms/footer";
 
 export default function LandingPage() {
   const [query, setQuery] = React.useState("");
@@ -16,12 +18,12 @@ export default function LandingPage() {
   const router = useRouter();
 
   const [stats, setStats] = React.useState({
-    products_compared: 11303,
-    products_today: 245,
+    products_compared: 60134,
+    products_today: 0,
     stores_active: 15,
-    stores_this_week: 1,
-    prices_registered: 22982,
-    prices_today: 532
+    stores_this_week: 0,
+    prices_registered: 65756,
+    prices_today: 0
   });
 
   React.useEffect(() => {
@@ -34,7 +36,9 @@ export default function LandingPage() {
 
     // Retrieve search count from localStorage
     const count = parseInt(localStorage.getItem("pricescout_guest_searches") || "0", 10);
-    setGuestSearchCount(count);
+    setTimeout(() => {
+      setGuestSearchCount(count);
+    }, 0);
 
     // Fetch live global statistics
     const fetchStats = async () => {
@@ -86,11 +90,15 @@ export default function LandingPage() {
     const toastId = toast.loading("Iniciando búsqueda inteligente...");
     try {
       // 1. Initiate search on FastAPI backend
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
       const response = await fetch(`${apiUrl}/search`, {
         method: "POST",
         headers: {
-          "Content-Type": "application/json"
+          "Content-Type": "application/json",
+          ...(session ? { "Authorization": `Bearer ${session.access_token}` } : {})
         },
         body: JSON.stringify({ query: searchQuery })
       });
@@ -123,44 +131,7 @@ export default function LandingPage() {
   return (
     <div className="min-h-screen bg-[var(--background)] flex flex-col antialiased">
       {/* ── Header ────────────────────────────────────────── */}
-      <header className="border-b border-[var(--color-slate-200)] bg-white/80 backdrop-blur-md sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-9 h-9 rounded-xl bg-[var(--color-primary-600)] flex items-center justify-center text-white font-display font-bold text-xl shadow-[var(--shadow-sm)]">
-              P
-            </div>
-            <span className="font-display font-bold text-xl text-[var(--color-slate-900)] tracking-tight">
-              PriceScout<span className="text-[var(--color-primary-600)]">.cl</span>
-            </span>
-          </div>
-
-          <div className="flex items-center gap-4">
-            {user ? (
-              <Link 
-                href="/dashboard" 
-                className="text-sm font-bold bg-[var(--color-primary-600)] hover:bg-[var(--color-primary-700)] text-white px-5 py-2.5 rounded-xl transition-all shadow-[var(--shadow-sm)] hover:shadow-md cursor-pointer"
-              >
-                Ir a mi Panel (Dashboard)
-              </Link>
-            ) : (
-              <>
-                <Link 
-                  href="/login" 
-                  className="text-sm font-semibold text-[var(--color-slate-700)] hover:text-[var(--color-primary-600)] px-4 py-2 transition-colors"
-                >
-                  Iniciar Sesión
-                </Link>
-                <Link 
-                  href="/register" 
-                  className="text-sm font-bold bg-[var(--color-primary-600)] hover:bg-[var(--color-primary-700)] text-white px-5 py-2.5 rounded-xl transition-all shadow-[var(--shadow-sm)] hover:shadow-md"
-                >
-                  Registrarse Gratis
-                </Link>
-              </>
-            )}
-          </div>
-        </div>
-      </header>
+      <Header />
 
       {/* ── Hero Section (Buscador Autónomo) ──────────────── */}
       <main className="flex-1">
@@ -177,15 +148,15 @@ export default function LandingPage() {
 
             {/* Headline */}
             <h1 className="font-display font-extrabold text-5xl md:text-6xl text-[var(--color-slate-900)] tracking-tight leading-[1.1] mb-6">
-              Compara precios en <br />
+              Monitorea y compara <br />
               <span className="bg-clip-text text-transparent bg-gradient-to-r from-[var(--color-primary-600)] to-[var(--color-accent-600)]">
-                toda la web de Chile
+                tus tiendas preferidas
               </span> al instante
             </h1>
 
             {/* Subtitle */}
             <p className="text-[var(--color-slate-600)] font-body text-lg md:text-xl max-w-2xl mx-auto mb-10 leading-relaxed">
-              Escribe el producto que quieres buscar. Nuestro rastreador autónomo con IA comparará precios, stock e imágenes en las mejores tiendas chilenas en tiempo real.
+              Escribe un producto para comparar precios, stock e imágenes en tiempo real. Personaliza tu monitoreo y sigue la evolución de valores en los principales comercios de Chile.
             </p>
 
             {/* Big Search Bar */}
@@ -302,11 +273,11 @@ export default function LandingPage() {
         </section>
 
         {/* ── Features Section ──────────────────────────────── */}
-        <section className="bg-white border-y border-[var(--color-slate-200)] py-20 px-6">
+        <section id="technology" className="bg-white border-y border-[var(--color-slate-200)] py-20 px-6">
           <div className="max-w-7xl mx-auto">
             <div className="text-center max-w-2xl mx-auto mb-16">
               <h2 className="font-display font-extrabold text-3xl md:text-4xl text-[var(--color-slate-900)] tracking-tight mb-4">
-                El motor de comparación más avanzado
+                Nuestra tecnología de comparación
               </h2>
               <p className="text-[var(--color-slate-500)] text-lg">
                 Combinamos extracción sigilosa y procesamiento de lenguaje natural para darte el control total de los precios.
@@ -521,22 +492,7 @@ export default function LandingPage() {
       </main>
 
       {/* ── Footer ────────────────────────────────────────── */}
-      <footer className="border-t border-[var(--color-slate-200)] bg-white py-12 px-6">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-[var(--color-primary-600)] flex items-center justify-center text-white font-display font-bold text-lg shadow-[var(--shadow-sm)]">
-              P
-            </div>
-            <span className="font-display font-bold text-lg text-[var(--color-slate-900)] tracking-tight">
-              PriceScout<span className="text-[var(--color-primary-600)]">.cl</span>
-            </span>
-          </div>
-          
-          <p className="text-[var(--color-slate-400)] font-body text-sm text-center">
-            &copy; {new Date().getFullYear()} PriceScout Chile. Todos los derechos reservados.
-          </p>
-        </div>
-      </footer>
+      <Footer />
 
       {/* ── Register Limit Modal for Guest Users ── */}
       {showLimitModal && (

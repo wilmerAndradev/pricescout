@@ -253,6 +253,20 @@ class ScraperBase(ABC):
                         self.logger.error(f"Error de fallback al guardar producto '{prod_data.get('title')}': {ex}")
                         result.errors.append(f"Failed to save product (fallback) '{prod_data.get('title')}': {str(ex)}")
 
+        # Desactivar productos que no fueron vistos en esta sincronización
+        try:
+            execute_with_retry(
+                db_client.table("products")
+                .update({"available": False})
+                .eq("store_slug", self.store_slug)
+                .lt("last_seen_at", now_iso)
+            )
+            self.logger.info("Productos obsoletos marcados como no disponibles.")
+        except Exception as e:
+            self.logger.error(f"Error al desactivar productos obsoletos para {self.store_slug}: {e}")
+            result.errors.append(f"Failed to deactivate stale products: {str(e)}")
+
+
 
 
 def _parse_clp(text: str) -> int:

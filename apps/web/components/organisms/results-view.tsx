@@ -5,8 +5,21 @@ import { PriceCard } from "@/components/molecules/price-card";
 import { LayoutGrid, List as ListIcon } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 
+export interface SearchResult {
+  id: string;
+  product_name: string;
+  price: number;
+  price_original?: number | null;
+  image_url?: string;
+  store_name: string;
+  source_url: string;
+  extraction_method?: string;
+  confidence_score?: string | null;
+  in_stock?: boolean;
+}
+
 export interface ResultsViewProps {
-  results: any[];
+  results: SearchResult[];
   lowestPrice: number | null;
 }
 

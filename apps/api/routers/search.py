@@ -224,6 +224,206 @@ def get_search_results(search_id: str):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.get("/suggestions")
+def get_search_suggestions(query: str, search_id: Optional[str] = None):
+    """
+    Returns alternative suggestions (variations of volume or concentration)
+    from the products table in Supabase for the searched product.
+    """
+    if not query.strip():
+        return {"suggestions": []}
+        
+    try:
+        from scrapers.normalizer import normalize_product_title, extract_volume_ml, is_dupe_product
+        from tasks.jobs import parse_product_details, BRAND_SYNONYMS, supabase_writer, smart_capitalize
+        from scrapers.matcher import BRAND_WORDS, GENERIC_WORDS
+        import re
+
+        # 1. Normalize and extract core tokens
+        query_normalized = normalize_product_title(query)
+        query_tokens = query_normalized.split()
+        if not query_tokens:
+            return {"suggestions": []}
+
+        core_tokens = [
+            t for t in query_tokens 
+            if t not in BRAND_WORDS and t not in GENERIC_WORDS and not t.isdigit()
+        ]
+
+        # 2. Extract volume and concentration of query
+        query_volume = extract_volume_ml(query)
+        valid_concentrations = ["edt", "edp", "edc", "parfum", "cologne", "extrait"]
+        query_concentration = next((t for t in query_tokens if t in valid_concentrations), None)
+
+        # 3. Detect original brand
+        brand, _, _, _, _ = parse_product_details(query)
+
+        # 4. Query products table in Supabase
+        q = supabase_writer.table("products").select("title, title_normalized, volume_ml, store_slug")
+        q = q.not_.is_("store_slug", "null")
+
+        if brand != "Genérico":
+            syns = BRAND_SYNONYMS.get(brand, [])
+            if syns:
+                or_filter = ",".join([f"title_normalized.ilike.%{syn}%" for syn in syns])
+                q = q.or_(or_filter)
+
+        for token in core_tokens:
+            q = q.ilike("title_normalized", f"%{token}%")
+
+        q = q.order("volume_ml", desc=False, nullsfirst=False)
+        q = q.limit(50)
+
+        res = execute_with_retry(q)
+        products = res.data or []
+
+        # 5. Filter and process suggestions in Python
+        suggestions = []
+        seen_combinations = set()
+        query_is_dupe = is_dupe_product(query)
+
+        CLONE_BRANDS = {
+            "maison alhambra", "maison al hambra", "fragrance world", "armaf", "lattafa", 
+            "afnan", "paris corner", "martin lion", "inzpira", "yodeyma", "divain", "instyle"
+        }
+
+        # Local title cleaning helper function
+        def clean_title(title_str: str, brand_name: str) -> str:
+            clean = title_str
+            noise_words = [
+                "tester", "decant", "muestra", "sample", "travel", "size", "miniatura", 
+                "nuevo", "new", "original", "sellado", "caja", "box", "sin caja", "sin celofan",
+                "hombre", "mujer", "unisex", "men", "women", "man", "woman", 
+                "pour homme", "pour femme", "luxe", "natural spray", "spray", "vaporisateur",
+                "set", "estuche", "pack", "cofre", "kit", "ml"
+            ]
+            noise_words = sorted(noise_words, key=len, reverse=True)
+            for w in noise_words:
+                clean = re.sub(r'\b' + re.escape(w) + r'\b', '', clean, flags=re.IGNORECASE)
+                
+            concentrations = ["edt", "edp", "edc", "parfum", "cologne", "extrait", "eau de parfum", "eau de toilette", "eau de cologne"]
+            concentrations = sorted(concentrations, key=len, reverse=True)
+            for c in concentrations:
+                clean = re.sub(r'\b' + re.escape(c) + r'\b', '', clean, flags=re.IGNORECASE)
+                
+            clean = re.sub(r'\b\d+\s*(?:ml|ML|mL|Ml|Mls|mls)?\b', '', clean, flags=re.IGNORECASE)
+            
+            if brand_name != "Genérico":
+                prefixes = [brand_name.lower()]
+                if brand_name == "Giorgio Armani":
+                    prefixes.append("armani")
+                elif brand_name == "Yves Saint Laurent":
+                    prefixes.append("ysl")
+                elif brand_name == "Carolina Herrera":
+                    prefixes.append("ch")
+                elif brand_name == "Calvin Klein":
+                    prefixes.append("ck")
+                elif brand_name == "Tom Ford":
+                    prefixes.append("tf")
+                elif brand_name == "Jean Paul Gaultier":
+                    prefixes.append("jpg")
+                elif brand_name == "Paco Rabanne":
+                    prefixes.append("rabanne")
+                elif brand_name == "Hugo Boss":
+                    prefixes.append("boss")
+                elif brand_name == "Antonio Banderas":
+                    prefixes.append("banderas")
+                elif brand_name in ["Christian Dior", "Dior"]:
+                    prefixes.extend(["christian dior", "dior"])
+                    
+                prefixes = sorted(prefixes, key=len, reverse=True)
+                for prefix in prefixes:
+                    pattern = r'^\s*' + re.escape(prefix) + r'\b'
+                    if re.search(pattern, clean, flags=re.IGNORECASE):
+                        clean = re.sub(pattern, '', clean, flags=re.IGNORECASE)
+                        break
+                        
+            clean = re.sub(r'\s+', ' ', clean)
+            clean = clean.strip().strip("-").strip(",").strip("/").strip()
+            return smart_capitalize(clean) if clean else "Producto"
+
+        for prod in products:
+            title = prod["title"]
+            title_norm = prod["title_normalized"]
+
+            # Exclude clones if the query does not ask for a clone
+            title_lower = title.lower()
+            query_lower = query.lower()
+            is_clone_product = any(cb in title_lower for cb in CLONE_BRANDS) or is_dupe_product(title)
+            is_clone_query = any(cb in query_lower for cb in CLONE_BRANDS) or is_dupe_product(query)
+
+            if is_clone_product and not is_clone_query:
+                continue
+
+            prod_volume = prod["volume_ml"]
+            if prod_volume is None:
+                prod_volume = extract_volume_ml(title)
+
+            prod_tokens = title_norm.split()
+            prod_concentration = next((t for t in prod_tokens if t in valid_concentrations), None)
+
+            is_different_volume = (query_volume is not None and prod_volume is not None and prod_volume != query_volume)
+            is_different_concentration = (query_concentration is not None and prod_concentration is not None and prod_concentration != query_concentration)
+
+            if query_volume is None and prod_volume is not None:
+                is_different_volume = True
+
+            if query_concentration is None and prod_concentration is not None:
+                is_different_concentration = True
+
+            if not (is_different_volume or is_different_concentration):
+                continue
+
+            combo = (prod_volume or 0, prod_concentration or "")
+            if combo in seen_combinations:
+                continue
+
+            seen_combinations.add(combo)
+
+            prod_brand, _, _, _, _ = parse_product_details(title)
+            prod_clean = clean_title(title, prod_brand)
+
+            # Build readable label with ONLY differential characteristics (concentration and volume)
+            label_parts = []
+            if prod_concentration:
+                label_parts.append(prod_concentration.upper())
+            if prod_volume:
+                label_parts.append(f"{prod_volume} ml")
+            
+            # Fallback to prod_clean if neither is found
+            if not label_parts:
+                label_parts.append(prod_clean)
+                
+            label = " ".join(label_parts)
+
+            # Build query string (with brand at the start)
+            query_parts = []
+            brand_to_use = prod_brand if prod_brand != "Genérico" else (brand if brand != "Genérico" else "")
+            if brand_to_use:
+                query_parts.append(brand_to_use)
+            if prod_clean:
+                query_parts.append(prod_clean)
+            if prod_concentration:
+                query_parts.append(prod_concentration.upper())
+            if prod_volume:
+                query_parts.append(f"{prod_volume} ml")
+            query_str = " ".join(query_parts)
+
+            suggestions.append({
+                "label": label,
+                "query": query_str
+            })
+
+            if len(suggestions) >= 6:
+                break
+
+        return {"suggestions": suggestions}
+
+    except Exception as e:
+        logger.error(f"Error in search suggestions endpoint: {e}")
+        return {"suggestions": []}
+
+
 @router.get("/stats")
 def get_global_stats():
     """

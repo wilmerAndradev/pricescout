@@ -15,7 +15,7 @@ export async function middleware(request: NextRequest) {
           return request.cookies.getAll();
         },
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) => request.cookies.set(name, value));
+          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
           supabaseResponse = NextResponse.next({
             request,
           });
@@ -40,11 +40,12 @@ export async function middleware(request: NextRequest) {
     request.nextUrl.pathname.startsWith("/api") ||
     request.nextUrl.pathname.includes("/favicon.ico");
 
-  // Exclude public routes like /design-system or /search
+  // Exclude public routes like /design-system, /search, or the auth callback
   const isPublicRoute = 
     request.nextUrl.pathname === "/" || 
     request.nextUrl.pathname.startsWith("/design-system") ||
-    request.nextUrl.pathname.startsWith("/search");
+    request.nextUrl.pathname.startsWith("/search") ||
+    request.nextUrl.pathname.startsWith("/auth/callback");
 
   if (!user && !isAuthPage && !isPublicRoute && !isNextInternal) {
     // no user, potentially respond by redirecting the user to the login page

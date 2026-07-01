@@ -421,6 +421,34 @@ def run_autonomous_search(self, search_id: str):
         results_inserted = 0
         inserted_store_domains = set()
         
+        # Deduplicar la lista de productos por store_slug y URL única para evitar tarjetas duplicadas
+        unique_products = {}
+        for prod in products:
+            slug = prod.get("store_slug")
+            url = prod.get("url")
+            if not slug or not url:
+                continue
+            
+            key = (slug, url)
+            existing = unique_products.get(key)
+            if not existing:
+                unique_products[key] = prod
+            else:
+                # Priorizar el que esté disponible (available = True)
+                existing_avail = existing.get("available", True)
+                current_avail = prod.get("available", True)
+                
+                if current_avail and not existing_avail:
+                    unique_products[key] = prod
+                elif current_avail == existing_avail:
+                    # Si la disponibilidad es la misma, priorizar el registro más reciente
+                    existing_seen = existing.get("last_seen_at") or ""
+                    current_seen = prod.get("last_seen_at") or ""
+                    if current_seen > existing_seen:
+                        unique_products[key] = prod
+                        
+        products = list(unique_products.values())
+
         for prod in products:
             raw_title = prod.get("title") or ""
             

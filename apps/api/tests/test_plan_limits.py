@@ -60,7 +60,7 @@ def test_get_user_plan_and_limits_db_starter(supabase_mock):
                 "searches_per_month": 100,
                 "stores_per_search": 10,
                 "can_choose_stores": False,
-                "projects_limit": 5
+                "projects_max": 5
             }])
         return MockQueryBuilder()
         

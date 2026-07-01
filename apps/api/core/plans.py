@@ -106,13 +106,14 @@ def get_user_plan_and_limits(user_id: Optional[str]) -> dict:
         if plans_res.data:
             db_limits = {}
             for row in plans_res.data:
+                plan_id_lower = row["id"].lower()
                 db_limits[row["id"]] = {
                     "name": row["name"],
                     "searches_per_month": row["searches_per_month"],
                     "stores_per_search": row["stores_per_search"],
-                    "can_choose_stores": row.get("can_choose_stores", False),
-                    "can_add_custom_stores": row.get("can_add_custom_stores", False),
-                    "projects_limit": row["projects_limit"],
+                    "can_choose_stores": "pro" in plan_id_lower or "business" in plan_id_lower,
+                    "can_add_custom_stores": "business" in plan_id_lower,
+                    "projects_limit": row["projects_max"],
                 }
             if plan_id in db_limits:
                 return db_limits[plan_id]

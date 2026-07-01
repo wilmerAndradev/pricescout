@@ -6,10 +6,12 @@ import Link from "next/link";
 import { 
   ArrowRight, Search, Loader2, Sparkles, Check, 
   ExternalLink, ShoppingBag, 
-  X, ShieldAlert, Award, LogOut, Bell
+  X, ShieldAlert, Award, LogOut, Bell, Filter
 } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
+import { Header } from "@/components/organisms/header";
+import { Footer } from "@/components/organisms/footer";
 
 // Mappings for store names and icons
 const STORES_LIST = [
@@ -253,12 +255,15 @@ export default function SearchResultsPage() {
   const [isSearching, setIsSearching] = React.useState(false);
   const [showLimitModal, setShowLimitModal] = React.useState(false);
   const [guestSearchCount, setGuestSearchCount] = React.useState(0);
+  const [suggestions, setSuggestions] = React.useState<any[]>([]);
+  const suggestionsFetchedRef = React.useRef<string | null>(null);
 
   const [prevSearchId, setPrevSearchId] = React.useState(searchId);
   if (searchId !== prevSearchId) {
     setPrevSearchId(searchId);
     setSearchInput("");
     setIsSearching(false);
+    setSuggestions([]);
   }
 
   const scrollToCheapestProduct = () => {
@@ -296,6 +301,7 @@ export default function SearchResultsPage() {
   const [maxPriceFilter, setMaxPriceFilter] = React.useState<number | "">("");
   const [minPriceFilter, setMinPriceFilter] = React.useState<number | "">("");
   const [onlyInStock, setOnlyInStock] = React.useState(false);
+  const [showFiltersMobile, setShowFiltersMobile] = React.useState(false);
 
   // Extraer opciones de filtro disponibles en caliente
   const filterOptions = React.useMemo(() => {
@@ -335,6 +341,20 @@ export default function SearchResultsPage() {
       maxPrice: absoluteMax === -Infinity ? 0 : absoluteMax
     };
   }, [results]);
+
+  // Cantidad de filtros activos
+  const activeFiltersCount = React.useMemo(() => {
+    let count = 0;
+    if (selectedBrands.length > 0) count += selectedBrands.length;
+    if (selectedGenders.length > 0) count += selectedGenders.length;
+    if (selectedVolumes.length > 0) count += selectedVolumes.length;
+    if (selectedTypes.length > 0) count += selectedTypes.length;
+    if (selectedStores.length > 0) count += selectedStores.length;
+    if (minPriceFilter !== "") count += 1;
+    if (maxPriceFilter !== "") count += 1;
+    if (onlyInStock) count += 1;
+    return count;
+  }, [selectedBrands, selectedGenders, selectedVolumes, selectedTypes, selectedStores, minPriceFilter, maxPriceFilter, onlyInStock]);
 
   // Filtrado de resultados en memoria
   const filteredResults = React.useMemo(() => {
@@ -384,92 +404,74 @@ export default function SearchResultsPage() {
     return `Los precios para la selección actual están parejos. La mejor oferta actual está en ${cheapestStore}.`;
   }, [filteredResults]);
 
-  // Agrupar resultados idénticos en caliente
+  // No agrupar, mostrar cada tienda/producto en su propia tarjeta
   const groupedProducts = React.useMemo(() => {
-    const groups: Record<string, any> = {};
-
-    filteredResults.forEach(product => {
-      const key = getProductKey(product);
+    return filteredResults.map(product => {
       const { brand, gender, volume, type, sku } = parseDescription(product.description, product.title);
       const cleanTitle = cleanProductTitle(product.title, brand, sku);
       
-      if (!groups[key]) {
-        groups[key] = {
-          id: product.id,
-          brand: brand,
-          title: cleanTitle,
-          gender: gender,
-          volume: volume,
-          type: type,
-          sku: sku,
-          image_url: product.image_url || "",
-          in_stock: false,
-          min_price: Infinity,
-          max_price: -Infinity,
-          cheapestPrice: product.price_clp > 0 ? product.price_clp : Infinity,
-          stores: []
-        };
-      }
-
-      const group = groups[key];
-      
-      if (!group.image_url && product.image_url) {
-        group.image_url = product.image_url;
-      }
-      
-      if (product.in_stock) {
-        group.in_stock = true;
-      }
-
-      if (product.price_clp > 0) {
-        if (product.price_clp < group.min_price) {
-          group.min_price = product.price_clp;
-        }
-        if (product.price_clp > group.max_price) {
-          group.max_price = product.price_clp;
-        }
-        
-        // El ID del grupo será el del producto más barato
-        if (product.price_clp < group.cheapestPrice) {
-          group.cheapestPrice = product.price_clp;
-          group.id = product.id;
-        }
-      }
-
-      group.stores.push({
+      return {
         id: product.id,
-        store_name: product.store_name,
-        store_domain: product.store_domain,
-        product_url: product.product_url,
-        price: product.price_clp,
-        original_price: product.original_price_clp,
-        discount_pct: product.discount_pct,
-        in_stock: product.in_stock
-      });
-    });
-
-    return Object.values(groups).map((group: any) => {
-      if (group.min_price === Infinity) group.min_price = 0;
-      if (group.max_price === -Infinity) group.max_price = 0;
-      
-      group.stores.sort((a: any, b: any) => {
-        if (!a.in_stock && b.in_stock) return 1;
-        if (a.in_stock && !b.in_stock) return -1;
-        return a.price - b.price;
-      });
-
-      return group;
+        brand: brand,
+        title: cleanTitle,
+        gender: gender,
+        volume: volume,
+        type: type,
+        sku: sku,
+        image_url: product.image_url || "",
+        in_stock: product.in_stock,
+        min_price: product.price_clp,
+        max_price: product.price_clp,
+        cheapestPrice: product.price_clp,
+        stores: [
+          {
+            id: product.id,
+            store_name: product.store_name,
+            store_domain: product.store_domain,
+            product_url: product.product_url,
+            price: product.price_clp,
+            original_price: product.original_price_clp,
+            discount_pct: product.discount_pct,
+            in_stock: product.in_stock
+          }
+        ]
+      };
     });
   }, [filteredResults]);
 
   // Poll intervals
   const pollIntervalRef = React.useRef<any>(null);
 
+  const fetchSuggestions = React.useCallback(async (searchQuery: string, id: string) => {
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
+      const response = await fetch(`${apiUrl}/search/suggestions?query=${encodeURIComponent(searchQuery)}&search_id=${id}`);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.suggestions && Array.isArray(data.suggestions)) {
+          setSuggestions(data.suggestions.slice(0, 6));
+        }
+      }
+    } catch (err) {
+      console.warn("Error fetching suggestions:", err);
+    }
+  }, []);
+
   const fetchResults = React.useCallback(async () => {
     try {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
       const response = await fetch(`${apiUrl}/search/${searchId}/results`);
+      
       if (!response.ok) {
+        if (response.status === 404) {
+          if (pollIntervalRef.current) {
+            clearInterval(pollIntervalRef.current);
+            pollIntervalRef.current = null;
+          }
+          toast.error("Búsqueda no encontrada");
+          router.push("/dashboard");
+          return;
+        }
         throw new Error("Failed to fetch results");
       }
       
@@ -481,6 +483,11 @@ export default function SearchResultsPage() {
       setResults(data.results || []);
       setKpis(data.kpis || { min_price: 0, max_price: 0, avg_price: 0, stores_found: 0 });
       setAiInsight(data.ai_insight);
+
+      if (data.query && suggestionsFetchedRef.current !== searchId) {
+        suggestionsFetchedRef.current = searchId as string;
+        fetchSuggestions(data.query, searchId as string);
+      }
       
       if (data.status === "completed" || data.status === "failed") {
         if (pollIntervalRef.current) {
@@ -491,9 +498,12 @@ export default function SearchResultsPage() {
     } catch (err) {
       console.warn("Polling error:", err);
     }
-  }, [searchId]);
+  }, [searchId, fetchSuggestions, router]);
 
   React.useEffect(() => {
+    // Reset suggestions cache ref
+    suggestionsFetchedRef.current = null;
+
     // Check if user is logged in
     const checkUser = async () => {
       const supabase = createClient();
@@ -529,23 +539,10 @@ export default function SearchResultsPage() {
     };
   }, [searchId, fetchResults]);
 
-  const handleLogout = async () => {
-    const supabase = createClient();
-    await supabase.auth.signOut();
-    toast.success("Sesión cerrada");
-    setUser(null);
-    setProfile(null);
-    router.push("/");
-  };
-
-  const handleNewSearch = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!searchInput.trim()) {
-      toast.error("Por favor, ingresa el nombre de un producto");
-      return;
-    }
-
-    const searchQuery = searchInput.trim();
+  const executeNewSearch = async (searchQuery: string) => {
+    // Clear previous suggestions immediately
+    setSuggestions([]);
+    suggestionsFetchedRef.current = null;
 
     // If the user is a guest, enforce the 5 searches limit
     if (!user) {
@@ -559,11 +556,15 @@ export default function SearchResultsPage() {
     setIsSearching(true);
     const toastId = toast.loading("Iniciando búsqueda inteligente...");
     try {
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
       const response = await fetch(`${apiUrl}/search`, {
         method: "POST",
         headers: {
-          "Content-Type": "application/json"
+          "Content-Type": "application/json",
+          ...(session ? { "Authorization": `Bearer ${session.access_token}` } : {})
         },
         body: JSON.stringify({ query: searchQuery })
       });
@@ -591,6 +592,20 @@ export default function SearchResultsPage() {
       toast.error(err.message || "Error al conectar con la API de búsqueda", { id: toastId });
       setIsSearching(false);
     }
+  };
+
+  const handleNewSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!searchInput.trim()) {
+      toast.error("Por favor, ingresa el nombre de un producto");
+      return;
+    }
+    executeNewSearch(searchInput.trim());
+  };
+
+  const handleSuggestionClick = (suggestionQuery: string) => {
+    setSearchInput(suggestionQuery);
+    executeNewSearch(suggestionQuery);
   };
 
   const handleSaveProject = async () => {
@@ -650,82 +665,7 @@ export default function SearchResultsPage() {
   return (
     <div className="min-h-screen bg-[var(--color-slate-50)] flex flex-col justify-between">
       {/* ── Adaptive Sticky Navbar ── */}
-      <nav className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-[var(--color-slate-200)] shadow-[var(--shadow-sm)]">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16">
-            <div className="flex">
-              {/* Logo */}
-              <div className="flex-shrink-0 flex items-center">
-                <Link href={user ? "/dashboard" : "/"} className="flex items-center gap-2">
-                  <div className="w-8 h-8 bg-[var(--color-primary-600)] rounded-[var(--radius-md)] flex items-center justify-center">
-                    <Search className="text-white" size={18} />
-                  </div>
-                  <span className="font-display text-xl font-bold text-[var(--color-primary-700)] hidden sm:block">
-                    PriceScout
-                  </span>
-                </Link>
-              </div>
-
-              {/* Navigation Link for Registered Users */}
-              {user && (
-                <div className="hidden sm:ml-8 sm:flex sm:space-x-8">
-                  <Link
-                    href="/dashboard"
-                    className="inline-flex items-center px-1 pt-1 border-b-2 border-transparent text-sm font-medium font-body text-[var(--color-slate-500)] hover:border-[var(--color-slate-300)] hover:text-[var(--color-slate-700)] transition-colors duration-200"
-                  >
-                    Dashboard
-                  </Link>
-                </div>
-              )}
-            </div>
-
-            <div className="flex items-center gap-4">
-              {user ? (
-                <>
-                  <button aria-label="Notificaciones" className="hidden sm:flex rounded-full p-2 hover:bg-[var(--color-slate-100)] text-[var(--color-slate-500)]">
-                    <Bell size={20} />
-                  </button>
-                  
-                  <div className="relative flex items-center gap-3">
-                    <div className="flex flex-col items-end hidden sm:flex">
-                      <span className="text-sm font-medium text-[var(--color-slate-900)] font-body">
-                        {displayName}
-                      </span>
-                    </div>
-                    {/* Avatar */}
-                    <div className="h-10 w-10 rounded-full bg-[var(--color-primary-100)] border border-[var(--color-primary-200)] flex items-center justify-center text-[var(--color-primary-700)] font-semibold font-body shadow-[var(--shadow-xs)]">
-                      {initials}
-                    </div>
-                    
-                    <button 
-                      onClick={handleLogout}
-                      className="inline-flex items-center justify-center gap-1 text-[var(--color-slate-500)] hover:text-red-600 font-medium font-body text-sm py-1.5 px-3 rounded-lg hover:bg-red-50 transition-colors"
-                    >
-                      <LogOut size={18} />
-                      <span className="hidden sm:inline">Salir</span>
-                    </button>
-                  </div>
-                </>
-              ) : (
-                <div className="flex items-center gap-4">
-                  <Link 
-                    href="/login" 
-                    className="text-sm font-semibold text-[var(--color-slate-600)] hover:text-[var(--color-primary-600)] transition-colors"
-                  >
-                    Iniciar Sesión
-                  </Link>
-                  <Link 
-                    href="/register" 
-                    className="inline-flex items-center justify-center gap-2 font-bold whitespace-nowrap rounded-xl transition-all duration-150 h-10 px-4 bg-[var(--color-primary-600)] hover:bg-[var(--color-primary-700)] text-white text-xs shadow-[var(--shadow-xs)] hover:shadow-md cursor-pointer"
-                  >
-                    Registrarse Gratis
-                  </Link>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </nav>
+      <Header displayName={user ? displayName : undefined} initials={user ? initials : undefined} />
 
       {/* ── Main Content Area ── */}
       <main className="flex-1 py-8">
@@ -811,6 +751,23 @@ export default function SearchResultsPage() {
                 </button>
               )}
             </div>
+
+            {/* ── Suggestions Chips ── */}
+            {suggestions.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2 mb-8 animate-fade-in">
+                <span className="text-sm text-[var(--color-slate-500)] font-medium font-body mr-1">Ver también:</span>
+                {suggestions.map((suggestion, index) => (
+                  <button
+                    key={index}
+                    onClick={() => handleSuggestionClick(suggestion.query)}
+                    disabled={isSearching}
+                    className="inline-flex items-center px-3.5 py-1.5 bg-[var(--color-slate-100)] hover:bg-[var(--color-slate-200)] text-[var(--color-slate-700)] hover:text-[var(--color-slate-900)] text-sm font-medium rounded-full border border-[var(--color-slate-200)] transition-colors cursor-pointer font-body disabled:opacity-50"
+                  >
+                    {suggestion.label}
+                  </button>
+                ))}
+              </div>
+            )}
 
             {/* ── Loading State / Skeleton Screen ── */}
             {(status === "pending" || status === "processing") && (
@@ -944,11 +901,29 @@ export default function SearchResultsPage() {
                   )}
                 </div>
 
+                {/* Botón de Filtros para Móviles (Solo visible en md o menores) */}
+                <div className="lg:hidden mb-2">
+                  <button
+                    onClick={() => setShowFiltersMobile(!showFiltersMobile)}
+                    className="w-full flex items-center justify-center gap-2 px-5 py-3.5 bg-white hover:bg-[var(--color-slate-50)] text-[var(--color-slate-800)] font-bold text-xs rounded-2xl border border-[var(--color-slate-200)] transition-all shadow-[var(--shadow-xs)] cursor-pointer"
+                  >
+                    <Filter size={14} className="text-[var(--color-slate-500)]" />
+                    {showFiltersMobile ? "Ocultar Filtros" : "Mostrar Filtros"}
+                    {activeFiltersCount > 0 && (
+                      <span className="ml-1 px-2 py-0.5 bg-[var(--color-primary-100)] text-[var(--color-primary-700)] text-[10px] font-bold rounded-full">
+                        {activeFiltersCount}
+                      </span>
+                    )}
+                  </button>
+                </div>
+
                 {/* Main section: Sidebar + Grid layout */}
                 <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 items-start">
                   
-                  {/* Sidebar Lateral de Filtros */}
-                  <div className="lg:col-span-1 bg-white p-6 rounded-2xl border border-[var(--color-slate-200)] shadow-[var(--shadow-sm)] space-y-6">
+                  {/* Sidebar Lateral de Filtros (Colapsable en móviles, visible por defecto en lg) */}
+                  <div className={`lg:col-span-1 bg-white p-6 rounded-2xl border border-[var(--color-slate-200)] shadow-[var(--shadow-sm)] space-y-6 lg:block ${
+                    showFiltersMobile ? "block" : "hidden"
+                  }`}>
                     <div className="flex items-center justify-between pb-4 border-b border-[var(--color-slate-100)]">
                       <h4 className="font-display font-bold text-[var(--color-slate-900)] text-sm uppercase tracking-wider">Filtros</h4>
                       {(selectedBrands.length > 0 || selectedGenders.length > 0 || selectedVolumes.length > 0 || selectedTypes.length > 0 || selectedStores.length > 0 || minPriceFilter !== "" || maxPriceFilter !== "" || onlyInStock) && (
@@ -1239,8 +1214,37 @@ export default function SearchResultsPage() {
                               </div>
                             </div>
 
-                            {/* Bottom: Action Link */}
-                            {group.stores[0]?.product_url ? (
+                            {/* Bottom: Action Link or Stores List */}
+                            {group.stores.length > 1 ? (
+                              <div className="mx-5 mb-5 space-y-2 pt-3 border-t border-[var(--color-slate-100)] border-dashed">
+                                <span className="text-[10px] font-bold text-[var(--color-slate-400)] uppercase tracking-wider block mb-1">Ofertas por Tienda:</span>
+                                <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1 scrollbar-thin">
+                                  {group.stores.map((store: any) => (
+                                    <div key={store.id} className="flex items-center justify-between text-xs py-1 border-b border-dashed border-[var(--color-slate-100)] last:border-b-0">
+                                      <div className="flex items-center gap-2">
+                                        <img 
+                                          src={`https://www.google.com/s2/favicons?sz=32&domain=${store.store_domain}`} 
+                                          alt={store.store_name}
+                                          className="w-3.5 h-3.5 rounded-sm object-contain flex-shrink-0"
+                                        />
+                                        <span className="font-semibold text-[var(--color-slate-700)]">{store.store_name}</span>
+                                      </div>
+                                      <div className="flex items-center gap-3">
+                                        <span className="font-bold text-[#15803d]">${store.price.toLocaleString("es-CL")}</span>
+                                        <a 
+                                          href={store.product_url}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="px-2 py-0.5 bg-[var(--color-slate-100)] hover:bg-[var(--color-primary-50)] hover:text-[var(--color-primary-700)] text-[var(--color-slate-700)] font-bold rounded-lg transition-colors flex items-center gap-1"
+                                        >
+                                          Ver <ExternalLink size={10} />
+                                        </a>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            ) : group.stores[0]?.product_url ? (
                               <a 
                                 href={group.stores[0].product_url} 
                                 target="_blank" 
@@ -1307,9 +1311,7 @@ export default function SearchResultsPage() {
       </main>
 
       {/* ── Footer ── */}
-      <footer className="bg-white border-t border-[var(--color-slate-200)] py-6 text-center text-xs text-[var(--color-slate-400)] font-semibold uppercase tracking-wider">
-        © 2026 PriceScout Chile. Todos los derechos reservados.
-      </footer>
+      <Footer />
 
       {/* ── Register Modal for Guest Users ── */}
       {showRegisterModal && (

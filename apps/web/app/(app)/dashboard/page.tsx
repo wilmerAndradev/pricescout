@@ -49,11 +49,11 @@ export default async function DashboardPage() {
     .limit(5);
 
   // Fetch global stats on the server side using the RPC function
-  let productsCount = 15999;
-  let pricesCount = 16597;
+  let productsCount = 60134;
+  let pricesCount = 65756;
   let activeStores = 15;
-  let productsToday = 245;
-  let pricesToday = 532;
+  let productsToday = 0;
+  let pricesToday = 0;
 
   try {
     const { data: stats, error: statsError } = await supabase.rpc("get_global_stats");
@@ -76,10 +76,10 @@ export default async function DashboardPage() {
   }
 
   return (
-    <div className="max-w-6xl mx-auto py-12 px-6 antialiased font-body">
+    <div className="max-w-6xl mx-auto py-8 md:py-12 px-4 sm:px-6 antialiased font-body">
       
       {/* ── Welcome Header ── */}
-      <div className="flex flex-col md:flex-row md:items-end justify-between mb-10 gap-6 pb-6 border-b border-[var(--color-slate-200)]">
+      <div className="flex flex-col md:flex-row md:items-end justify-between mb-6 md:mb-10 gap-6 pb-6 border-b border-[var(--color-slate-200)]">
         <div>
           <h1 className="font-display text-4xl font-extrabold text-[var(--color-slate-900)] tracking-tight mb-2">
             ¡Hola de nuevo!
@@ -158,7 +158,7 @@ export default async function DashboardPage() {
       </div>
 
       {/* ── Integrated Header Search Bar (BS-01) ── */}
-      <div className="bg-gradient-to-r from-[var(--color-primary-600)] to-[var(--color-primary-700)] rounded-3xl p-8 mb-12 shadow-[var(--shadow-md)] relative overflow-hidden">
+      <div className="bg-gradient-to-r from-[var(--color-primary-600)] to-[var(--color-primary-700)] rounded-3xl p-6 sm:p-8 mb-8 md:mb-12 shadow-[var(--shadow-md)] relative overflow-hidden">
         <div className="absolute top-0 right-0 w-80 h-80 bg-white/10 rounded-full blur-2xl -mr-16 -mt-16" />
         <div className="relative z-10 max-w-3xl">
           <h2 className="font-display font-bold text-2xl text-white mb-2 flex items-center gap-2">
@@ -304,7 +304,7 @@ export default async function DashboardPage() {
                   ¿Quieres monitorear la evolución de precios de un producto a largo plazo?
                 </p>
                 <p className="text-xs text-[var(--color-slate-400)] italic">
-                  Busca un producto y haz clic en "Guardar y Monitorear".
+                  Busca un producto y haz clic en &quot;Guardar y Monitorear&quot;.
                 </p>
               </div>
             ) : (
@@ -314,7 +314,7 @@ export default async function DashboardPage() {
                     <div className="flex items-start justify-between gap-3">
                       <span className="font-bold text-xs text-[var(--color-slate-800)] line-clamp-1 leading-snug">{project.name}</span>
                       <Link 
-                        href={`/search/${project.id}`} // Placeholder for project graphs view
+                        href={`/projects/${project.id}`}
                         className="text-[var(--color-primary-600)] hover:underline flex-shrink-0"
                       >
                         <ExternalLink size={14} />

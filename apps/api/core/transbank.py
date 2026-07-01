@@ -7,7 +7,7 @@ logger = logging.getLogger(__name__)
 
 # Sandbox configuration defaults
 SANDBOX_COMMERCE_CODE = "597055555532"
-SANDBOX_API_KEY = "579B532A7440BB0C9079DED94D31EA1615B1C2B17DFD8E48D0B3E518E88EBBAB"
+SANDBOX_API_KEY = "579B532A7440BB0C9079DED94D31EA1615BACEB56610332264630D42D0A36B1C"
 SANDBOX_BASE_URL = "https://webpay3gint.transbank.cl"
 
 class TransbankWebpayClient:
@@ -26,8 +26,8 @@ class TransbankWebpayClient:
                 logger.error("Production mode active but commerce code or API key are missing.")
                 raise ValueError("Production environment requires TRANSBANK_COMMERCE_CODE and TRANSBANK_API_KEY")
         else:
-            self.commerce_code = os.environ.get("TRANSBANK_COMMERCE_CODE", SANDBOX_COMMERCE_CODE)
-            self.api_key = os.environ.get("TRANSBANK_API_KEY", SANDBOX_API_KEY)
+            self.commerce_code = os.environ.get("TRANSBANK_COMMERCE_CODE") or SANDBOX_COMMERCE_CODE
+            self.api_key = os.environ.get("TRANSBANK_API_KEY") or SANDBOX_API_KEY
             self.base_url = SANDBOX_BASE_URL
             
         self.headers = {
@@ -41,7 +41,7 @@ class TransbankWebpayClient:
         Creates a transaction in Webpay Plus.
         Returns a dictionary containing 'token' and 'url'.
         """
-        url = f"{self.base_url}/rs-webpay-sem/api/webpay/v1.2/transactions"
+        url = f"{self.base_url}/rswebpaytransaction/api/webpay/v1.2/transactions"
         payload = {
             "buy_order": buy_order,
             "session_id": session_id,
@@ -70,7 +70,7 @@ class TransbankWebpayClient:
         Confirms a transaction with Webpay Plus.
         This must be called within 3 hours of transaction initiation.
         """
-        url = f"{self.base_url}/rs-webpay-sem/api/webpay/v1.2/transactions/{token}"
+        url = f"{self.base_url}/rswebpaytransaction/api/webpay/v1.2/transactions/{token}"
         
         logger.info(f"Committing Transbank transaction. Token: {token}")
         
@@ -94,7 +94,7 @@ class TransbankWebpayClient:
         Retrieves the status of a transaction.
         Useful for checking status before/after callback.
         """
-        url = f"{self.base_url}/rs-webpay-sem/api/webpay/v1.2/transactions/{token}"
+        url = f"{self.base_url}/rswebpaytransaction/api/webpay/v1.2/transactions/{token}"
         
         logger.info(f"Fetching Transbank transaction status. Token: {token}")
         

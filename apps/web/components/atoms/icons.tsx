@@ -46,6 +46,9 @@ export {
   MoreHorizontal,
   Copy,
   Share2,
+  Layers,
+  ShieldCheck,
+  Sparkles,
 } from "lucide-react";
 
 /** Standard icon sizes per FDS */

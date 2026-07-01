@@ -63,6 +63,14 @@ class HtmlParserScraper(ScraperBase):
             self.logger.error("No se pudo resolver una URL de catálogo válida para iniciar.")
             return scraped_products
 
+        # Detectar si es Jumpseller usando la primera URL del catálogo
+        urls_to_process = [u.strip() for u in resolved_url_str.split(",") if u.strip()]
+        if urls_to_process:
+            is_jumpseller = await self._detect_jumpseller(urls_to_process[0])
+            if is_jumpseller:
+                self.logger.info("Jumpseller detectado. Iniciando extracción determinista con BeautifulSoup...")
+                return await self._fetch_jumpseller_products(urls_to_process)
+
         try:
             from scrapling.fetchers import StealthyFetcher
         except ImportError:
@@ -368,3 +376,204 @@ class HtmlParserScraper(ScraperBase):
                 self.logger.error(f"Groq fallback extraction failed: {e}")
                 
         return None
+
+    async def _detect_jumpseller(self, url: str) -> bool:
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        }
+        try:
+            async with httpx.AsyncClient(headers=headers, timeout=15.0, follow_redirects=True) as client:
+                r = await client.get(url)
+                if r.status_code == 200:
+                    html = r.text.lower()
+                    return "jumpseller" in html or "cdnx.jumpseller.com" in html
+        except Exception as e:
+            self.logger.warning(f"Error detecting platform for {url}: {e}")
+        return False
+
+    async def _fetch_jumpseller_products(self, urls_to_process: list[str]) -> list[ScrapedProduct]:
+        scraped_products = []
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        }
+        
+        async with httpx.AsyncClient(headers=headers, timeout=20.0, follow_redirects=True) as client:
+            for start_url in urls_to_process:
+                self.logger.info(f"--- Iniciando extracción determinista Jumpseller para: {start_url} ---")
+                page_count = 1
+                max_pages = 800  # Permitir recorrer catálogos completos
+                
+                while page_count <= max_pages:
+                    # Construir URL con página
+                    if "?" in start_url:
+                        current_url = f"{start_url}&page={page_count}"
+                    else:
+                        current_url = f"{start_url}?page={page_count}"
+                        
+                    self.logger.info(f"Scraping Jumpseller page {page_count} at: {current_url}")
+                    
+                    html = None
+                    try:
+                        r = await client.get(current_url)
+                        if r.status_code == 200:
+                            html = r.text
+                    except Exception as e:
+                        self.logger.error(f"Error fetching Jumpseller page {current_url}: {e}")
+                        break
+                        
+                    if not html or len(html) < 200:
+                        self.logger.error(f"Obtained empty or invalid HTML from {current_url}")
+                        break
+                        
+                    from bs4 import BeautifulSoup
+                    soup = BeautifulSoup(html, "html.parser")
+                    
+                    # Extraer productos
+                    extracted = self._parse_jumpseller_page(soup, current_url)
+                    if not extracted:
+                        self.logger.info(f"No more products found on page {page_count}. Finished category.")
+                        break
+                        
+                    self.logger.info(f"Extracted {len(extracted)} products from Jumpseller page {page_count}.")
+                    
+                    for prod in extracted:
+                        scraped_products.append(
+                            ScrapedProduct(
+                                store_slug=self.store_slug,
+                                store_name=self.store_name,
+                                store_url=self.store_url,
+                                title=prod["title"],
+                                title_normalized=normalize_product_title(prod["title"]),
+                                price=prod["price"],
+                                currency="CLP",
+                                url=prod["url"],
+                                image_url=prod["image_url"],
+                                available=prod["available"],
+                                variants=[],
+                                raw_data=prod,
+                                scraped_at=datetime.now(timezone.utc),
+                                sync_method="html_parser"
+                            )
+                        )
+                        
+                    page_count += 1
+                    await self._request_delay()
+                    
+        return scraped_products
+
+    def _parse_jumpseller_page(self, soup, base_url: str) -> list[dict]:
+        import re
+        from urllib.parse import urljoin
+        
+        products = []
+        seen_urls = set()
+        
+        # Encontrar todas las tarjetas de producto
+        card_candidates = soup.find_all(lambda tag: tag.name in ["div", "li", "article"] and tag.get("class") and any(
+            c for c in tag.get("class") if c in ["product-block", "product-card"] or ("product" in c and "qty" not in c and "list" not in c and "grid" not in c)
+        ))
+        
+        if not card_candidates:
+            card_candidates = soup.find_all(lambda tag: tag.name in ["div", "li", "article"] and tag.get("class") and any(
+                "product" in c or "card" in c or "item" in c for c in tag.get("class")
+            ))
+            
+        for block in card_candidates:
+            import copy
+            block_copy = copy.copy(block)
+            
+            # Decomponer cuotas, valoraciones y badges de reviews
+            for tag in block_copy.find_all(class_=lambda c: c and any(x in c.lower() for x in ["cuotas", "installment", "payment", "ratings", "rating", "star", "reviews", "review"])):
+                tag.decompose()
+                
+            # Encontrar el primer enlace que sea realmente un producto y no un filtro/marca/etc.
+            a_tag = None
+            for a in block_copy.find_all("a", href=True):
+                href_val = a["href"].strip()
+                if (href_val in ["/", "#", "/all"] or 
+                    any(x in href_val for x in ["page=", "sorting=", "/customer/", "/marcas/", "/marca/", "/brand/", "/categoria/", "/category/", "/price/", "checkout", "cart", "?max=", "?min="])):
+                    continue
+                a_tag = a
+                break
+                
+            if not a_tag:
+                continue
+                
+            href = a_tag["href"]
+            full_url = urljoin(base_url, href)
+            if full_url in seen_urls:
+                continue
+                
+            # Extraer precios
+            prices = []
+            for el in block_copy.find_all(True):
+                if not el.find(): # hoja sin hijos
+                    text = el.get_text(strip=True).lower()
+                    if "$" in text and "%" not in text:
+                        if " x " in text or "cuotas" in text or "interes" in text or "interés" in text:
+                            continue
+                        nums = re.findall(r'\d+(?:\.\d+)?', text.replace(".", "").replace("$", ""))
+                        for num in nums:
+                            try:
+                                val = float(num)
+                                if 1000 <= val <= 500000:
+                                    prices.append(val)
+                            except ValueError:
+                                pass
+                                
+            if not prices:
+                continue
+                
+            price = min(prices)
+            
+            # Extraer título
+            title = None
+            title_el = (
+                block_copy.find(class_=lambda c: c and any(x in c.lower() for x in ["title", "name", "nombre"])) or
+                block_copy.find(["h2", "h3", "h4", "h5", "h6"])
+            )
+            if title_el:
+                title = title_el.get_text(strip=True)
+            if not title:
+                img = block_copy.find("img")
+                if img and img.get("alt"):
+                    title = img["alt"].strip()
+            if not title:
+                title = a_tag.get_text(strip=True)
+                
+            title = " ".join(title.split())
+            if not title or len(title) < 5 or any(x in title.lower() for x in ["ingresar", "crear cuenta", "lista de favoritos", "favoritos", "mi cuenta"]):
+                continue
+                
+            # Imagen
+            image_url = None
+            img_tag = block_copy.find("img")
+            if img_tag:
+                for attr in ["src", "data-src", "data-lazy-src", "data-original", "srcset"]:
+                    val = img_tag.get(attr)
+                    if val:
+                        if attr == "srcset":
+                            parts = val.split(",")
+                            if parts:
+                                image_url = urljoin(base_url, parts[0].strip().split()[0])
+                                break
+                        else:
+                            image_url = urljoin(base_url, val)
+                            break
+                            
+            # Stock
+            available = True
+            block_text = block_copy.get_text().lower()
+            if any(x in block_text for x in ["agotado", "sin stock", "out of stock", "no disponible"]):
+                available = False
+                
+            products.append({
+                "title": title,
+                "url": full_url,
+                "price": price,
+                "image_url": image_url,
+                "available": available
+            })
+            seen_urls.add(full_url)
+            
+        return products

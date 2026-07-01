@@ -17,6 +17,7 @@ class StoreConfig:
 
 STORES: list[StoreConfig] = [
     # Shopify JSON (método fácil)
+    StoreConfig(slug="alisha", name="Alisha Perfumes", url="https://alishaperfumes.cl", sync_method=SyncMethod.SHOPIFY_JSON),
     StoreConfig(slug="cosmetic", name="Cosmetic", url="https://cosmetic.cl", sync_method=SyncMethod.SHOPIFY_JSON),
     StoreConfig(slug="comprarenchile", name="ComprarenChile", url="https://comprarenchile.cl", sync_method=SyncMethod.SHOPIFY_JSON),
     StoreConfig(slug="elite-perfumes", name="Elite Perfumes", url="https://www.eliteperfumes.cl", sync_method=SyncMethod.SHOPIFY_JSON),
@@ -32,10 +33,9 @@ STORES: list[StoreConfig] = [
 
     # HTML Parser (tiendas custom)
     StoreConfig(slug="alarab", name="Alarab", url="https://www.alarab.cl", sync_method=SyncMethod.HTML_PARSER, catalog_url="https://www.alarab.cl/marcas"),
-    StoreConfig(slug="alisha", name="Alisha Perfumes", url="https://alishaperfumes.cl", sync_method=SyncMethod.HTML_PARSER, catalog_url="https://alishaperfumes.cl/productos"),
     StoreConfig(slug="paris-perfumes", name="ParisPerfumes", url="https://www.parisperfumes.cl", sync_method=SyncMethod.HTML_PARSER, catalog_url="https://www.parisperfumes.cl/perfumes-1,https://www.parisperfumes.cl/ofertas"),
     StoreConfig(slug="sairam", name="Sairam", url="https://sairam.cl", sync_method=SyncMethod.HTML_PARSER, catalog_url="https://sairam.cl/perfumes-de-hombre,https://sairam.cl/perfumes-de-mujer,https://sairam.cl/perfumes-unisex,https://sairam.cl/perfume/perfumes-arabes"),
-    StoreConfig(slug="joy-perfumes", name="JoyPerfumes", url="https://joyperfumes.cl", sync_method=SyncMethod.HTML_PARSER, catalog_url="https://joyperfumes.cl/productos"),
+    StoreConfig(slug="joy-perfumes", name="JoyPerfumes", url="https://joyperfumes.cl", sync_method=SyncMethod.HTML_PARSER, catalog_url="https://joyperfumes.cl/all"),
 ]
 
 def get_store_by_slug(slug: str) -> StoreConfig | None:
