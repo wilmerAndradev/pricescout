@@ -18,50 +18,93 @@ import {
 // ── Store Strip ──────────────────────────────────────────────────────────────
 // Only lists stores that are currently active in apps/api/scrapers/registry.py
 const ACTIVE_STORES = [
-  { name: "Alisha Perfumes", color: "#7C3AED" },
-  { name: "Cosmetic", color: "#DB2777" },
-  { name: "Elite Perfumes", color: "#0EA5E9" },
-  { name: "Lodoro", color: "#059669" },
-  { name: "MultiMarcas", color: "#D97706" },
-  { name: "Mundo Aromas", color: "#7C3AED" },
-  { name: "Perfumisimo", color: "#E11D48" },
-  { name: "Silk Perfumes", color: "#6366F1" },
-  { name: "Alarab", color: "#0284C7" },
-  { name: "ParisPerfumes", color: "#BE185D" },
-  { name: "Sairam", color: "#047857" },
-  { name: "JoyPerfumes", color: "#DC2626" },
-  { name: "Yauras", color: "#9333EA" },
-  { name: "ComprarenChile", color: "#B45309" },
-  { name: "Productos de Lujo", color: "#1D4ED8" },
+  { name: "Alisha Perfumes",   domain: "alishaperfumes.cl",       initials: "AL" },
+  { name: "Cosmetic",          domain: "cosmetic.cl",              initials: "CO" },
+  { name: "Elite Perfumes",    domain: "eliteperfumes.cl",         initials: "EP" },
+  { name: "Lodoro",            domain: "lodoro.cl",                initials: "LO" },
+  { name: "MultiMarcas",       domain: "multimarcasperfumes.cl",   initials: "MM" },
+  { name: "Mundo Aromas",      domain: "mundoaromas.cl",           initials: "MA" },
+  { name: "Perfumisimo",       domain: "perfumisimo.cl",           initials: "PF" },
+  { name: "Silk Perfumes",     domain: "silkperfumes.cl",          initials: "SP" },
+  { name: "Alarab",            domain: "alarab.cl",                initials: "AR" },
+  { name: "ParisPerfumes",     domain: "parisperfumes.cl",         initials: "PP" },
+  { name: "Sairam",            domain: "sairam.cl",                initials: "SA" },
+  { name: "JoyPerfumes",       domain: "joyperfumes.cl",           initials: "JP" },
+  { name: "Yauras",            domain: "yauras.cl",                initials: "YA" },
+  { name: "ComprarenChile",    domain: "comprarenchile.cl",        initials: "CC" },
+  { name: "Productos de Lujo", domain: "productosdelujo.cl",       initials: "PL" },
 ];
 
-export function StoreStrip() {
+function StoreLogo({ domain, initials, name }: { domain: string; initials: string; name: string }) {
+  const [failed, setFailed] = React.useState(false);
+  const src = `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
+
+  if (failed) {
+    return (
+      <span className="w-10 h-10 rounded-xl bg-[var(--color-primary-100)] text-[var(--color-primary-700)] flex items-center justify-center text-xs font-black flex-shrink-0">
+        {initials}
+      </span>
+    );
+  }
+
   return (
-    <section className="py-12 px-6 bg-white border-b border-[var(--color-slate-200)]">
-      <div className="max-w-6xl mx-auto">
-        <p className="text-center text-xs font-bold text-[var(--color-slate-400)] uppercase tracking-widest mb-8">
-          Comparamos precios en las mejores tiendas especializadas de Chile
-        </p>
-        <div className="flex flex-wrap items-center justify-center gap-3">
-          {ACTIVE_STORES.map((store) => (
-            <span
-              key={store.name}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full border text-xs font-bold tracking-wide transition-all hover:scale-105"
-              style={{
-                backgroundColor: `${store.color}12`,
-                borderColor: `${store.color}30`,
-                color: store.color,
-              }}
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={src}
+      alt={`Logo ${name}`}
+      width={40}
+      height={40}
+      className="w-10 h-10 rounded-xl object-contain bg-white border border-[var(--color-slate-100)] p-1 flex-shrink-0"
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
+export function StoreStrip() {
+  // Duplicate the list so the marquee loops seamlessly
+  const doubled = [...ACTIVE_STORES, ...ACTIVE_STORES];
+
+  return (
+    <section className="py-14 bg-white border-b border-[var(--color-slate-200)] overflow-hidden">
+      <p className="text-center text-xs font-bold text-[var(--color-slate-400)] uppercase tracking-widest mb-10 px-6">
+        Comparamos precios en las mejores tiendas especializadas de Chile
+      </p>
+
+      {/* Fade edges */}
+      <div className="relative">
+        <div className="pointer-events-none absolute left-0 top-0 bottom-0 w-24 z-10 bg-gradient-to-r from-white to-transparent" />
+        <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-24 z-10 bg-gradient-to-l from-white to-transparent" />
+
+        {/* Marquee track */}
+        <div
+          className="flex items-center gap-6 w-max animate-marquee hover:[animation-play-state:paused]"
+          style={{
+            animation: "marquee 32s linear infinite",
+          }}
+        >
+          {doubled.map((store, i) => (
+            <div
+              key={`${store.name}-${i}`}
+              className="flex flex-col items-center gap-2 group flex-shrink-0"
             >
-              <span
-                className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                style={{ backgroundColor: store.color }}
-              />
-              {store.name}
-            </span>
+              <div className="w-16 h-16 rounded-2xl bg-[var(--color-slate-50)] border border-[var(--color-slate-200)] flex items-center justify-center shadow-sm group-hover:shadow-md group-hover:border-[var(--color-primary-200)] transition-all p-2">
+                <StoreLogo domain={store.domain} initials={store.initials} name={store.name} />
+              </div>
+              <span className="text-[10px] font-semibold text-[var(--color-slate-500)] text-center leading-tight max-w-[72px]">
+                {store.name}
+              </span>
+            </div>
           ))}
         </div>
       </div>
+
+      {/* Keyframe injection */}
+      <style>{`
+        @keyframes marquee {
+          0%   { transform: translateX(0); }
+          100% { transform: translateX(-50%); }
+        }
+      `}</style>
     </section>
   );
 }
