@@ -39,7 +39,8 @@ origins = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     # We will allow Vercel domains via regex in production, but for now we specify allowed exact
-    "https://pricescout.vercel.app"
+    "https://pricescout.vercel.app",
+    "https://pricescout-chile.vercel.app"
 ]
 
 app.add_middleware(

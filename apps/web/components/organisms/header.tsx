@@ -255,7 +255,7 @@ export function Header({ displayName: initialDisplayName, initials: initialIniti
                   href="/register" 
                   className="text-sm font-bold bg-[var(--color-primary-600)] hover:bg-[var(--color-primary-700)] text-white px-4 py-2 rounded-xl transition-all shadow-[var(--shadow-sm)] hover:shadow-md font-body"
                 >
-                  Registrarse Gratis
+                  Empezar gratis
                 </Link>
               </div>
             )}

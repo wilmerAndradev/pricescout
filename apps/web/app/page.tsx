@@ -8,6 +8,14 @@ import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { Header } from "@/components/organisms/header";
 import { Footer } from "@/components/organisms/footer";
+import {
+  StoreStrip,
+  HowItWorks,
+  MockupDemo,
+  PricingTrustSignals,
+  FaqSection,
+  NewsletterBlock,
+} from "@/components/organisms/landing-sections";
 
 export default function LandingPage() {
   const [query, setQuery] = React.useState("");
@@ -272,6 +280,15 @@ export default function LandingPage() {
           </div>
         </section>
 
+        {/* ── Store Strip ──────────────────────────────────── */}
+        <StoreStrip />
+
+        {/* ── How It Works ─────────────────────────────────── */}
+        <HowItWorks />
+
+        {/* ── Interactive Mockup Demo ──────────────────────── */}
+        <MockupDemo />
+
         {/* ── Features Section ──────────────────────────────── */}
         <section id="technology" className="bg-white border-y border-[var(--color-slate-200)] py-20 px-6">
           <div className="max-w-7xl mx-auto">
@@ -463,6 +480,14 @@ export default function LandingPage() {
                   <ul className="space-y-3 mb-8">
                     <li className="flex items-start gap-2.5 text-sm text-[var(--color-slate-600)]">
                       <Check size={16} className="text-green-600 mt-0.5 flex-shrink-0" />
+                      Búsquedas ilimitadas
+                    </li>
+                    <li className="flex items-start gap-2.5 text-sm text-[var(--color-slate-600)]">
+                      <Check size={16} className="text-green-600 mt-0.5 flex-shrink-0" />
+                      Sin límite de tiendas
+                    </li>
+                    <li className="flex items-start gap-2.5 text-sm text-[var(--color-slate-600)]">
+                      <Check size={16} className="text-green-600 mt-0.5 flex-shrink-0" />
                       Monitorea 500 productos
                     </li>
                     <li className="flex items-start gap-2.5 text-sm text-[var(--color-slate-600)]">
@@ -471,7 +496,7 @@ export default function LandingPage() {
                     </li>
                     <li className="flex items-start gap-2.5 text-sm text-[var(--color-slate-600)]">
                       <Check size={16} className="text-green-600 mt-0.5 flex-shrink-0" />
-                      **Añade tus propios dominios**
+                      Añade tus propios dominios
                     </li>
                     <li className="flex items-start gap-2.5 text-sm text-[var(--color-slate-600)]">
                       <Check size={16} className="text-green-600 mt-0.5 flex-shrink-0" />
@@ -487,8 +512,17 @@ export default function LandingPage() {
                 </Link>
               </div>
             </div>
+
+            {/* Trust Signals */}
+            <PricingTrustSignals />
           </div>
         </section>
+
+        {/* ── FAQ Section ──────────────────────────────────── */}
+        <FaqSection />
+
+        {/* ── Newsletter Block ─────────────────────────────── */}
+        <NewsletterBlock />
       </main>
 
       {/* ── Footer ────────────────────────────────────────── */}
