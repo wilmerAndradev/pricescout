@@ -190,6 +190,9 @@ NUNCA commitear .env ni .env.local. Solo .env.example.
 - Tests unitarios y E2E para Backend (pytest) y Frontend (Vitest + Playwright) (MA-07)
 - Reescritura completa del motor de matching y normalización (scoring continuo, tolerancia a errores fuzzy, y detección de duplicados/clones) (MA-01/MA-04)
 - Optimización de precisión y diferenciación de números de edición/serie vs volumen en el matching (MA-01/MA-04)
+- Configuración de entornos protegida y visualmente adaptada con banners de Modo Autónomo vs Manual (MA-09)
+- Formulario de contacto interactivo en el Footer y endpoint de correo dinámico por tipo de consulta
+- Integración de modales de conversión premium y redirección fluida a planes de pago por límites de proyectos y entornos (MA-07)
 
 
 ### En progreso 🔄
