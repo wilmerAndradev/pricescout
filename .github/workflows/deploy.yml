@@ -5,6 +5,10 @@ on:
     branches:
       - main
 
+env:
+  VERCEL_ORG_ID: team_4zNlTrLDYS8Zz4v7OdVHGBTl
+  VERCEL_PROJECT_ID: prj_syIXQSulWzMeKiKcX9mSdsjY5Oo8
+
 jobs:
   deploy:
     name: Deploy → Vercel (Production)
@@ -26,21 +30,12 @@ jobs:
 
       - name: Pull Vercel environment info
         working-directory: apps/web
-        env:
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
         run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
 
       - name: Build project artifacts
         working-directory: apps/web
-        env:
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
         run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
 
       - name: Deploy to production
         working-directory: apps/web
-        env:
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
         run: vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
