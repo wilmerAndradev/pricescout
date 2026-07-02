@@ -1,0 +1,14 @@
+[tool.ruff]
+# Excluir scripts de debug/scratch del linting de CI
+exclude = [
+    "scratch_*.py",
+    "run_local.py",
+    "temp_web_scraper/",
+    "__pycache__/",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+ignore = [
+    "E501",  # line too long (manejado en revisión de código)
+]
