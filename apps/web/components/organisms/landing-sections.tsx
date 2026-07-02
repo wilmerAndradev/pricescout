@@ -36,12 +36,17 @@ const ACTIVE_STORES = [
 ];
 
 function StoreLogo({ domain, initials, name }: { domain: string; initials: string; name: string }) {
-  const [failed, setFailed] = React.useState(false);
-  const src = `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
+  // Try sources in order: Clearbit (clean brand logo) → Google Favicons → letter avatar
+  const sources = [
+    `https://logo.clearbit.com/${domain}`,
+    `https://www.google.com/s2/favicons?domain=${domain}&sz=128`,
+  ];
+  const [srcIndex, setSrcIndex] = React.useState(0);
 
-  if (failed) {
+  if (srcIndex >= sources.length) {
+    // All image sources failed — show letter avatar
     return (
-      <span className="w-10 h-10 rounded-xl bg-[var(--color-primary-100)] text-[var(--color-primary-700)] flex items-center justify-center text-xs font-black flex-shrink-0">
+      <span className="w-10 h-10 rounded-xl bg-gradient-to-br from-[var(--color-primary-500)] to-[var(--color-accent-600)] text-white flex items-center justify-center text-xs font-black flex-shrink-0 select-none">
         {initials}
       </span>
     );
@@ -50,12 +55,12 @@ function StoreLogo({ domain, initials, name }: { domain: string; initials: strin
   return (
     // eslint-disable-next-line @next/next/no-img-element
     <img
-      src={src}
-      alt={`Logo ${name}`}
-      width={40}
-      height={40}
-      className="w-10 h-10 rounded-xl object-contain bg-white border border-[var(--color-slate-100)] p-1 flex-shrink-0"
-      onError={() => setFailed(true)}
+      src={sources[srcIndex]}
+      alt={`Logo de ${name}`}
+      width={48}
+      height={48}
+      className="w-full h-full object-contain"
+      onError={() => setSrcIndex((i) => i + 1)}
     />
   );
 }
