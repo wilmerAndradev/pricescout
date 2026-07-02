@@ -64,6 +64,10 @@ def get_job_status(job_id: str, user_id: str = Depends(get_current_user)):
 
         job = job_res.data[0]
 
+        # Check ownership: verify comparison job belongs to the authenticated user
+        if job.get("user_id") and str(job["user_id"]) != str(user_id):
+            raise HTTPException(status_code=403, detail="Forbidden: You do not own this job")
+
         # Check completed price_results
         results_res = execute_with_retry(supabase_writer.table("price_results").select("id", count="exact").eq("comparison_job_id", job_id))
         completed_count = results_res.count if results_res.count is not None else 0

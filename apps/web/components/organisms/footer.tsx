@@ -16,6 +16,7 @@ export function Footer() {
 
   // Feedback Form State
   const [isFeedbackModalOpen, setIsFeedbackModalOpen] = React.useState(false);
+  const [modalType, setModalType] = React.useState<"contact" | "bug">("bug");
   const [feedbackName, setFeedbackName] = React.useState("");
   const [feedbackContact, setFeedbackContact] = React.useState("");
   const [feedbackMessage, setFeedbackMessage] = React.useState("");
@@ -40,6 +41,7 @@ export function Footer() {
           name: feedbackName.trim(),
           contact: feedbackContact.trim(),
           message: feedbackMessage.trim(),
+          type: modalType,
         }),
       });
 
@@ -126,9 +128,19 @@ export function Footer() {
               <h4 className="font-display font-bold text-xs text-[var(--color-slate-900)] uppercase tracking-wider">Soporte & Legal</h4>
               <ul className="space-y-2.5 text-xs md:text-sm font-medium">
                 <li>
-                  <a href="mailto:soporte@pricescout.cl" className="hover:text-[var(--color-primary-600)] transition-colors flex items-center gap-1.5">
+                  <button 
+                    onClick={() => {
+                      setFeedbackName("");
+                      setFeedbackContact("");
+                      setFeedbackMessage("");
+                      setSubmitSuccess(false);
+                      setModalType("contact");
+                      setIsFeedbackModalOpen(true);
+                    }}
+                    className="hover:text-[var(--color-primary-600)] transition-colors flex items-center gap-1.5 font-medium cursor-pointer"
+                  >
                     <Mail size={14} />Contacto
-                  </a>
+                  </button>
                 </li>
                 <li>
                   <Link href="/terms" className="hover:text-[var(--color-primary-600)] transition-colors">Términos de Servicio</Link>
@@ -143,6 +155,7 @@ export function Footer() {
                       setFeedbackContact("");
                       setFeedbackMessage("");
                       setSubmitSuccess(false);
+                      setModalType("bug");
                       setIsFeedbackModalOpen(true);
                     }}
                     className="text-[var(--color-danger-500)] hover:opacity-80 transition-all flex items-center gap-1.5 font-semibold cursor-pointer"
@@ -182,14 +195,22 @@ export function Footer() {
             {!submitSuccess ? (
               <form onSubmit={handleSubmitFeedback} className="flex flex-col gap-5">
                 <div className="text-center space-y-2">
-                  <div className="w-12 h-12 rounded-full bg-red-50 text-[var(--color-danger-500)] flex items-center justify-center mx-auto">
-                    <AlertCircle size={24} />
-                  </div>
+                  {modalType === "bug" ? (
+                    <div className="w-12 h-12 rounded-full bg-red-50 text-[var(--color-danger-500)] flex items-center justify-center mx-auto">
+                      <AlertCircle size={24} />
+                    </div>
+                  ) : (
+                    <div className="w-12 h-12 rounded-full bg-blue-50 text-[var(--color-primary-600)] flex items-center justify-center mx-auto">
+                      <Mail size={24} />
+                    </div>
+                  )}
                   <h3 className="font-display font-extrabold text-2xl text-[var(--color-slate-900)]">
-                    Reportar un problema
+                    {modalType === "bug" ? "Reportar un problema" : "Contacto y Consultas"}
                   </h3>
                   <p className="text-xs text-[var(--color-slate-500)] font-body max-w-xs mx-auto">
-                    ¿Algo no funciona como debería? Envíanos los detalles para que nuestro equipo lo solucione.
+                    {modalType === "bug"
+                      ? "¿Algo no funciona como debería? Envíanos los detalles para que nuestro equipo lo solucione."
+                      : "¿Tienes dudas o sugerencias? Escríbenos y te responderemos a la brevedad."}
                   </p>
                 </div>
 
@@ -226,14 +247,14 @@ export function Footer() {
 
                   <div className="flex flex-col gap-1.5">
                     <label htmlFor="feedback-message" className="text-xs font-bold text-[var(--color-slate-700)] uppercase tracking-wide">
-                      Mensaje / Descripción del error
+                      {modalType === "bug" ? "Mensaje / Descripción del error" : "Mensaje / Consulta"}
                     </label>
                     <textarea 
                       id="feedback-message"
                       required
                       value={feedbackMessage}
                       onChange={(e) => setFeedbackMessage(e.target.value)}
-                      placeholder="Describe qué sucedió o cuál es la falla..."
+                      placeholder={modalType === "bug" ? "Describe qué sucedió o cuál es la falla..." : "Escribe tu consulta o mensaje aquí..."}
                       rows={4}
                       className="w-full px-3.5 py-2.5 rounded-xl border border-[var(--color-slate-200)] text-sm shadow-[var(--shadow-xs)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary-100)] focus:border-[var(--color-primary-600)] transition-all resize-none bg-white"
                     />
@@ -251,7 +272,11 @@ export function Footer() {
                   <button 
                     type="submit"
                     disabled={isSubmitting}
-                    className="flex-1 py-3 bg-[var(--color-danger-500)] hover:opacity-90 text-white font-bold text-center rounded-xl text-sm transition-all shadow-[var(--shadow-sm)] hover:shadow-md cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
+                    className={`flex-1 py-3 text-white font-bold text-center rounded-xl text-sm transition-all shadow-[var(--shadow-sm)] hover:shadow-md cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50 ${
+                      modalType === "bug"
+                        ? "bg-[var(--color-danger-500)] hover:opacity-90"
+                        : "bg-[var(--color-primary-600)] hover:bg-[var(--color-primary-700)]"
+                    }`}
                   >
                     {isSubmitting ? (
                       <>
@@ -259,7 +284,7 @@ export function Footer() {
                         <span>Enviando...</span>
                       </>
                     ) : (
-                      <span>Enviar reporte</span>
+                      <span>{modalType === "bug" ? "Enviar reporte" : "Enviar mensaje"}</span>
                     )}
                   </button>
                 </div>
@@ -271,10 +296,12 @@ export function Footer() {
                 </div>
                 <div className="space-y-2">
                   <h3 className="font-display font-extrabold text-2xl text-[var(--color-slate-900)]">
-                    ¡Reporte Enviado!
+                    {modalType === "bug" ? "¡Reporte Enviado!" : "¡Mensaje Enviado!"}
                   </h3>
                   <p className="text-sm text-[var(--color-slate-500)] font-body leading-relaxed max-w-xs mx-auto">
-                    Gracias por informarnos del problema. Hemos recibido los detalles del error y nuestro equipo lo resolverá a la brevedad.
+                    {modalType === "bug"
+                      ? "Gracias por informarnos del problema. Hemos recibido los detalles del error y nuestro equipo lo resolverá a la brevedad."
+                      : "Gracias por ponerte en contacto. Hemos recibido tu consulta y te responderemos al correo ingresado a la brevedad."}
                   </p>
                 </div>
                 <button 

@@ -13,6 +13,8 @@ import {
   TrendingDown,
   ShieldCheck,
   PackageCheck,
+  ShoppingBag,
+  ExternalLink,
 } from "lucide-react";
 
 // ── Store Strip ──────────────────────────────────────────────────────────────
@@ -36,17 +38,20 @@ const ACTIVE_STORES = [
 ];
 
 function StoreLogo({ domain, initials, name }: { domain: string; initials: string; name: string }) {
-  // Try sources in order: Clearbit (clean brand logo) → Google Favicons → letter avatar
-  const sources = [
-    `https://logo.clearbit.com/${domain}`,
-    `https://www.google.com/s2/favicons?domain=${domain}&sz=128`,
-  ];
-  const [srcIndex, setSrcIndex] = React.useState(0);
+  const [mounted, setMounted] = React.useState(false);
+  const [failed, setFailed] = React.useState(false);
 
-  if (srcIndex >= sources.length) {
-    // All image sources failed — show letter avatar
+  React.useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted) {
+    return <div className="w-10 h-10 rounded-xl bg-[var(--color-slate-100)] animate-pulse flex-shrink-0" />;
+  }
+
+  if (failed) {
     return (
-      <span className="w-10 h-10 rounded-xl bg-gradient-to-br from-[var(--color-primary-500)] to-[var(--color-accent-600)] text-white flex items-center justify-center text-xs font-black flex-shrink-0 select-none">
+      <span className="w-10 h-10 rounded-xl bg-gradient-to-br from-[var(--color-primary-600)] to-[var(--color-accent-600)] text-white flex items-center justify-center text-xs font-bold flex-shrink-0 select-none">
         {initials}
       </span>
     );
@@ -55,19 +60,24 @@ function StoreLogo({ domain, initials, name }: { domain: string; initials: strin
   return (
     // eslint-disable-next-line @next/next/no-img-element
     <img
-      src={sources[srcIndex]}
+      src={`https://www.google.com/s2/favicons?domain=${domain}&sz=64`}
       alt={`Logo de ${name}`}
-      width={48}
-      height={48}
-      className="w-full h-full object-contain"
-      onError={() => setSrcIndex((i) => i + 1)}
+      width={40}
+      height={40}
+      className="w-10 h-10 rounded-xl object-contain bg-white border border-[var(--color-slate-100)] p-1 flex-shrink-0"
+      onError={() => setFailed(true)}
     />
   );
 }
 
 export function StoreStrip() {
-  // Duplicate the list so the marquee loops seamlessly
-  const doubled = [...ACTIVE_STORES, ...ACTIVE_STORES];
+  // Repeat the list 4 times so the marquee loops seamlessly on any screen size (including 4K)
+  const repeated = [
+    ...ACTIVE_STORES,
+    ...ACTIVE_STORES,
+    ...ACTIVE_STORES,
+    ...ACTIVE_STORES,
+  ];
 
   return (
     <section className="py-14 bg-white border-b border-[var(--color-slate-200)] overflow-hidden">
@@ -87,15 +97,19 @@ export function StoreStrip() {
             animation: "marquee 32s linear infinite",
           }}
         >
-          {doubled.map((store, i) => (
+          {repeated.map((store, i) => (
             <div
               key={`${store.name}-${i}`}
-              className="flex flex-col items-center gap-2 group flex-shrink-0"
+              className="flex flex-col items-center gap-2 group flex-shrink-0 transition-transform duration-300 hover:-translate-y-1.5"
             >
-              <div className="w-16 h-16 rounded-2xl bg-[var(--color-slate-50)] border border-[var(--color-slate-200)] flex items-center justify-center shadow-sm group-hover:shadow-md group-hover:border-[var(--color-primary-200)] transition-all p-2">
+              <div
+                className={`w-16 h-16 rounded-2xl bg-white border border-[var(--color-slate-200)] flex items-center justify-center shadow-sm group-hover:shadow-[0_10px_25px_-5px_rgba(37,99,235,0.12)] group-hover:scale-105 ${
+                  i % 2 === 0 ? "group-hover:rotate-3" : "group-hover:-rotate-3"
+                } transition-all duration-300 p-2`}
+              >
                 <StoreLogo domain={store.domain} initials={store.initials} name={store.name} />
               </div>
-              <span className="text-[10px] font-semibold text-[var(--color-slate-500)] text-center leading-tight max-w-[72px]">
+              <span className="text-[10px] font-semibold text-[var(--color-slate-500)] text-center leading-tight max-w-[72px] group-hover:text-[var(--color-primary-600)] transition-colors duration-300">
                 {store.name}
               </span>
             </div>
@@ -107,7 +121,7 @@ export function StoreStrip() {
       <style>{`
         @keyframes marquee {
           0%   { transform: translateX(0); }
-          100% { transform: translateX(-50%); }
+          100% { transform: translateX(-25%); }
         }
       `}</style>
     </section>
@@ -192,95 +206,168 @@ export function HowItWorks() {
 
 // ── Interactive Mockup (Sauvage Dior demo) ───────────────────────────────────
 const MOCKUP_RESULTS = [
-  { store: "Perfumisimo", price: 59990, stock: true, url: "#" },
-  { store: "Elite Perfumes", price: 64990, stock: true, url: "#" },
-  { store: "Alisha Perfumes", price: 67500, stock: false, url: "#" },
-  { store: "Silk Perfumes", price: 71990, stock: true, url: "#" },
-  { store: "MultiMarcas", price: 73490, stock: false, url: "#" },
+  {
+    store: "Cosmetic",
+    domain: "cosmetic.cl",
+    brand: "Dior",
+    title: "Sauvage Dior De Christian Dior Para Hombre EDT 100 ML Tester",
+    price: 59990,
+    stock: true,
+    initials: "CO",
+    isCheapest: true
+  },
+  {
+    store: "Perfumisimo",
+    domain: "perfumisimo.cl",
+    brand: "Dior",
+    title: "Sauvage Dior EDT 100 ML - Dior",
+    price: 64990,
+    stock: true,
+    initials: "PF",
+    isCheapest: false
+  },
+  {
+    store: "Elite Perfumes",
+    domain: "eliteperfumes.cl",
+    brand: "Dior",
+    title: "Christian Dior Sauvage De Dior EDT 100ml Hombre",
+    price: 67500,
+    stock: false,
+    initials: "EP",
+    isCheapest: false
+  },
 ];
 
 export function MockupDemo() {
-  const minPrice = Math.min(...MOCKUP_RESULTS.map((r) => r.price));
-  const maxPrice = Math.max(...MOCKUP_RESULTS.map((r) => r.price));
-  const savings = maxPrice - minPrice;
-
   return (
-    <section className="py-20 px-6 bg-white border-y border-[var(--color-slate-200)]">
-      <div className="max-w-5xl mx-auto">
+    <section className="py-20 px-6 bg-[var(--color-slate-50)] border-y border-[var(--color-slate-200)] relative overflow-hidden">
+      {/* Visual Marketing background glow elements */}
+      <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-blue-400/10 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-emerald-400/10 rounded-full blur-3xl pointer-events-none" />
+
+      <div className="max-w-6xl mx-auto relative z-10">
         <div className="text-center mb-12">
           <h2 className="font-display font-extrabold text-3xl md:text-4xl text-[var(--color-slate-900)] tracking-tight mb-4">
-            Mira lo que encuentras
+            Mira cómo se ven los resultados reales
           </h2>
           <p className="text-[var(--color-slate-500)] text-lg max-w-xl mx-auto">
-            Así se ven los resultados reales para <span className="font-semibold text-[var(--color-slate-700)]">Sauvage Dior 100ml</span>.
+            Así se muestra la comparativa de precios real en la aplicación para <span className="font-semibold text-[var(--color-slate-700)]">Sauvage Dior 100ml</span>.
           </p>
         </div>
 
-        <div className="bg-[var(--color-slate-50)] rounded-3xl border border-[var(--color-slate-200)] p-6 md:p-8 shadow-[var(--shadow-sm)]">
-          {/* Search bar mockup */}
-          <div className="flex items-center gap-3 px-4 py-3 bg-white rounded-xl border border-[var(--color-slate-200)] shadow-sm mb-6">
-            <Search size={18} className="text-[var(--color-slate-400)]" />
-            <span className="text-[var(--color-slate-700)] font-body text-sm flex-1">Sauvage Dior 100ml</span>
-            <span className="px-3 py-1 bg-[var(--color-primary-600)] text-white text-xs font-bold rounded-lg">Buscando...</span>
+        {/* Real search results mock UI */}
+        <div className="bg-white rounded-3xl border border-[var(--color-slate-200)] p-6 md:p-8 shadow-[var(--shadow-lg)]">
+          {/* Header row with KPIs */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+            <div className="bg-emerald-50/50 rounded-2xl border border-emerald-200 p-4 transition-all hover:bg-emerald-50/80">
+              <div className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                Precio Mínimo
+              </div>
+              <div className="text-2xl font-black text-emerald-700">$59.990</div>
+              <div className="text-[10px] text-emerald-600 font-bold mt-1">Mejor opción disponible</div>
+            </div>
+            <div className="bg-blue-50/50 rounded-2xl border border-blue-200 p-4 transition-all hover:bg-blue-50/80">
+              <div className="text-[10px] font-bold text-blue-700 uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                Precio Promedio
+              </div>
+              <div className="text-2xl font-black text-blue-700">$64.160</div>
+              <div className="text-[10px] text-blue-500 font-bold mt-1">Media de las tiendas</div>
+            </div>
+            <div className="bg-rose-50/50 rounded-2xl border border-rose-200 p-4 transition-all hover:bg-rose-50/80">
+              <div className="text-[10px] font-bold text-rose-700 uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                Precio Máximo
+              </div>
+              <div className="text-2xl font-black text-rose-700">$67.500</div>
+              <div className="text-[10px] text-rose-500 font-bold mt-1">Tienda más cara</div>
+            </div>
           </div>
 
-          {/* Savings banner */}
-          <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-emerald-50 border border-emerald-200 mb-5">
-            <TrendingDown size={18} className="text-emerald-600 flex-shrink-0" />
-            <p className="text-sm text-emerald-700 font-semibold">
-              Ahorra hasta <span className="font-black">${savings.toLocaleString("es-CL")}</span> comprando en la tienda más barata vs. la más cara
-            </p>
-          </div>
-
-          {/* Results */}
-          <div className="space-y-3">
+          {/* Cards Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {MOCKUP_RESULTS.map((r, i) => {
-              const isCheapest = r.price === minPrice;
               return (
                 <div
                   key={i}
-                  className={`flex items-center gap-4 px-4 py-3.5 rounded-xl border transition-all ${
-                    isCheapest
-                      ? "bg-emerald-50 border-emerald-300 shadow-sm"
-                      : "bg-white border-[var(--color-slate-200)]"
+                  className={`bg-white rounded-2xl border flex flex-col justify-between overflow-hidden transition-all duration-300 group hover:-translate-y-2 hover:shadow-[0_20px_35px_-10px_rgba(15,23,42,0.12)] ${
+                    r.isCheapest
+                      ? "border-emerald-500 ring-4 ring-emerald-50"
+                      : "border-[var(--color-slate-200)] hover:border-blue-400"
                   }`}
                 >
-                  {/* Store badge */}
-                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-black flex-shrink-0 ${
-                    isCheapest ? "bg-emerald-600 text-white" : "bg-[var(--color-slate-100)] text-[var(--color-slate-600)]"
-                  }`}>
-                    {i + 1}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className={`text-sm font-bold truncate ${isCheapest ? "text-emerald-800" : "text-[var(--color-slate-900)]"}`}>
-                      {r.store}
-                      {isCheapest && (
-                        <span className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-600 text-white text-[10px] font-bold uppercase">
-                          Mejor precio
+                  {/* Card Image area */}
+                  <div className="p-5 border-b border-[var(--color-slate-100)] relative flex items-center justify-center min-h-[160px] bg-[var(--color-slate-50)] overflow-hidden">
+                    {/* Store badge */}
+                    <div className="absolute top-4 left-4 bg-white/95 backdrop-blur border border-[var(--color-slate-200)] px-2.5 py-1 rounded-full flex items-center gap-1.5 shadow-[var(--shadow-xs)] z-10">
+                      <img
+                        src={`https://www.google.com/s2/favicons?sz=64&domain=${r.domain}`}
+                        alt={r.store}
+                        className="w-4 h-4 rounded-sm object-contain"
+                      />
+                      <span className="text-[10px] font-bold text-[var(--color-slate-700)] tracking-tight">{r.store}</span>
+                    </div>
+
+                    {/* Stock badge */}
+                    <div className="absolute top-4 right-4 z-10">
+                      {r.stock ? (
+                        <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 text-[10px] font-bold rounded-full border border-emerald-200 uppercase">
+                          Stock
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 bg-rose-100 text-rose-800 text-[10px] font-bold rounded-full border border-rose-200 uppercase">
+                          Agotado
                         </span>
                       )}
-                    </p>
-                    <p className={`text-xs mt-0.5 flex items-center gap-1 ${r.stock ? "text-emerald-600" : "text-[var(--color-slate-400)]"}`}>
-                      {r.stock ? <PackageCheck size={12} /> : null}
-                      {r.stock ? "En stock" : "Sin stock"}
-                    </p>
+                    </div>
+
+                    {/* Generated Perfume Mockup Image */}
+                    <div className="relative w-24 h-24 flex items-center justify-center transition-transform duration-500 group-hover:scale-110">
+                      <div className="absolute w-16 h-16 bg-blue-600/5 rounded-full blur-xl group-hover:bg-blue-600/10 transition-colors" />
+                      <img 
+                        src="/images/sauvage_mockup.png" 
+                        alt={r.title}
+                        className="h-24 object-contain relative z-10 drop-shadow-md"
+                      />
+                    </div>
                   </div>
-                  <div className="text-right flex-shrink-0">
-                    <p className={`text-base font-black ${isCheapest ? "text-emerald-700" : "text-[var(--color-slate-900)]"}`}>
-                      ${r.price.toLocaleString("es-CL")}
-                    </p>
-                    <p className="text-[10px] text-[var(--color-slate-400)] font-medium">CLP</p>
+
+                  {/* Card Details */}
+                  <div className="p-5 flex-1 flex flex-col justify-between gap-4">
+                    <div className="space-y-1">
+                      <span className="text-[10px] font-bold text-[var(--color-slate-400)] uppercase tracking-wider block">
+                        {r.brand}
+                      </span>
+                      <h3 className="font-display font-bold text-[var(--color-slate-900)] text-sm line-clamp-2 leading-snug group-hover:text-[var(--color-primary-700)] transition-colors">
+                        {r.title}
+                      </h3>
+                    </div>
+
+                    <div className="pt-2">
+                      <div className="text-2xl font-extrabold text-[#047857] tracking-tight leading-none">
+                        ${r.price.toLocaleString("es-CL")}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Card Footer Action */}
+                  <div className="p-5 pt-0">
+                    <div className="w-full h-10 bg-[var(--color-slate-100)] text-[var(--color-slate-700)] font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 cursor-pointer hover:bg-[var(--color-primary-600)] hover:text-white transition-all shadow-sm">
+                      Ver en tienda
+                      <ExternalLink size={12} />
+                    </div>
                   </div>
                 </div>
               );
             })}
           </div>
 
-          {/* CTA */}
-          <div className="mt-6 text-center">
+          {/* CTA at the bottom */}
+          <div className="mt-8 text-center border-t border-[var(--color-slate-100)] pt-6">
             <Link
               href="/register"
-              className="inline-flex items-center gap-2 px-6 py-3 bg-[var(--color-primary-600)] hover:bg-[var(--color-primary-700)] text-white font-bold rounded-xl text-sm transition-all shadow hover:shadow-md cursor-pointer"
+              className="inline-flex items-center gap-2 px-6 py-3 bg-[var(--color-primary-600)] hover:bg-[var(--color-primary-700)] text-white font-bold rounded-xl text-sm transition-all shadow hover:shadow-md cursor-pointer hover:scale-105 transform duration-200"
             >
               Buscar en tiempo real
               <ArrowRight size={16} />
@@ -412,8 +499,8 @@ export function NewsletterBlock() {
   return (
     <section className="py-20 px-6 bg-[var(--color-slate-900)]">
       <div className="max-w-2xl mx-auto text-center">
-        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[var(--color-primary-600)]/20 text-[var(--color-primary-400)] text-xs font-bold uppercase tracking-widest mb-6">
-          <Bell size={12} />
+        <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20 text-xs font-bold uppercase tracking-widest mb-6">
+          <Bell size={12} className="animate-ring-bell" />
           Novedades y ofertas
         </div>
         <h2 className="font-display font-extrabold text-3xl md:text-4xl text-white tracking-tight mb-4">

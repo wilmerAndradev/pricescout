@@ -28,6 +28,7 @@ export default function EnvironmentsPage() {
   const [environments, setEnvironments] = React.useState<any[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
   const [canAddCustomStores, setCanAddCustomStores] = React.useState(false);
+  const [canChooseStores, setCanChooseStores] = React.useState(false);
   
   // Form State
   const [isSaving, setIsSaving] = React.useState(false);
@@ -64,6 +65,7 @@ export default function EnvironmentsPage() {
           const billingData = await billingRes.json();
           const planId = billingData.plan?.id?.toLowerCase() || "";
           setCanAddCustomStores(planId.includes("business"));
+          setCanChooseStores(planId.includes("pro") || planId.includes("business"));
         }
       } catch (e) {
         console.error("Could not fetch billing limits:", e);
@@ -160,12 +162,31 @@ export default function EnvironmentsPage() {
         });
       }
 
-      if (!response.ok) throw new Error("Failed to save environment");
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        const detail = errorData.detail?.detail || errorData.detail?.message || errorData.detail || "Error al guardar el entorno";
+        const code = errorData.detail?.code || errorData.code;
+        throw { message: detail, code, status: response.status };
+      }
       
       toast.success("Entorno guardado correctamente", { id: toastId });
       fetchEnvironments();
     } catch (err: any) {
-      toast.error("Error al guardar el entorno", { id: toastId });
+      const msg = err.message || "Error al guardar el entorno";
+      if (err.status === 403 || err.code === "PLAN_RESTRICTION") {
+        toast.error(msg, {
+          id: toastId,
+          duration: 6000,
+          action: {
+            label: "Actualizar Plan",
+            onClick: () => {
+              window.location.href = "/dashboard/billing";
+            }
+          }
+        });
+      } else {
+        toast.error(msg, { id: toastId });
+      }
     } finally {
       setIsSaving(false);
     }
@@ -273,179 +294,261 @@ export default function EnvironmentsPage() {
 
           {/* Right Column: Environment details form */}
           <div className="md:col-span-2">
-            <form onSubmit={handleSave} className="bg-white rounded-2xl border border-[var(--color-slate-200)] shadow-[var(--shadow-sm)] overflow-hidden">
-              <div className="p-6 border-b border-[var(--color-slate-200)] bg-[var(--color-slate-50)] flex items-center justify-between">
-                <h3 className="font-display font-bold text-lg text-[var(--color-slate-800)]">
-                  {selectedEnv ? `Editar: ${selectedEnv.name}` : "Nuevo Entorno de Búsqueda"}
-                </h3>
-                {selectedEnv && (
-                  <button
-                    type="button"
-                    onClick={handleDelete}
-                    className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
-                    title="Eliminar Entorno"
-                  >
-                    <Trash2 size={18} />
-                  </button>
-                )}
-              </div>
-
-              <div className="p-6 space-y-6">
-                {/* 1. Environment Name */}
-                <div className="space-y-2">
-                  <label className="block text-sm font-bold text-[var(--color-slate-700)]">
-                    Nombre del Entorno
-                  </label>
-                  <input
-                    type="text"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="Ej: Mi Entorno de Perfumerías..."
-                    className="w-full h-11 px-4 bg-[var(--color-slate-50)] border border-[var(--color-slate-200)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--color-primary-100)] text-sm"
-                    disabled={isSaving}
-                  />
-                </div>
-
-                {/* 2. Mode Selection */}
-                <div className="space-y-2">
-                  <label className="block text-sm font-bold text-[var(--color-slate-700)] flex items-center gap-1.5">
-                    Modo del Entorno
-                    <span title="Autónomo: PriceScout selecciona dinámicamente las tiendas relevantes de tu lista activa según el tipo de producto. Manual: Busca estrictamente en todas las tiendas activas sin importar la categoría.">
-                      <HelpCircle size={14} className="text-[var(--color-slate-400)] cursor-help" />
-                    </span>
-                  </label>
-                  <div className="grid grid-cols-2 gap-4">
-                    <button
-                      type="button"
-                      onClick={() => setMode("autonomous")}
-                      className={`p-4 border rounded-xl font-semibold text-xs flex flex-col gap-1 cursor-pointer transition-all ${
-                        mode === "autonomous"
-                          ? "border-[var(--color-primary-600)] bg-[var(--color-primary-50)] text-[var(--color-primary-700)]"
-                          : "border-[var(--color-slate-200)] bg-white text-[var(--color-slate-500)]"
-                      }`}
-                      disabled={isSaving}
-                    >
-                      <span className="flex items-center gap-1.5 font-bold">
-                        <Sparkles size={14} /> Modo Autónomo
-                      </span>
-                      <span className="text-[10px] opacity-80 font-normal">
-                        Rastreo dinámico inteligente según el producto
-                      </span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setMode("manual")}
-                      className={`p-4 border rounded-xl font-semibold text-xs flex flex-col gap-1 cursor-pointer transition-all ${
-                        mode === "manual"
-                          ? "border-[var(--color-primary-600)] bg-[var(--color-primary-50)] text-[var(--color-primary-700)]"
-                          : "border-[var(--color-slate-200)] bg-white text-[var(--color-slate-500)]"
-                      }`}
-                      disabled={isSaving}
-                    >
-                      <span className="flex items-center gap-1.5 font-bold">
-                        <Layers size={14} /> Modo Manual
-                      </span>
-                      <span className="text-[10px] opacity-80 font-normal">
-                        Rastrea estrictamente en todas tus tiendas activas
-                      </span>
-                    </button>
+            <div className="relative">
+              {/* Form container, optionally blurred */}
+              <div className={!canChooseStores ? "filter blur-[3px] pointer-events-none select-none opacity-45" : ""}>
+                <form onSubmit={handleSave} className="bg-white rounded-2xl border border-[var(--color-slate-200)] shadow-[var(--shadow-sm)] overflow-hidden">
+                  <div className="p-6 border-b border-[var(--color-slate-200)] bg-[var(--color-slate-50)] flex items-center justify-between">
+                    <h3 className="font-display font-bold text-lg text-[var(--color-slate-800)]">
+                      {selectedEnv ? `Editar: ${selectedEnv.name}` : "Nuevo Entorno de Búsqueda"}
+                    </h3>
+                    {selectedEnv && (
+                      <button
+                        type="button"
+                        onClick={handleDelete}
+                        className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                        title="Eliminar Entorno"
+                      >
+                        <Trash2 size={18} />
+                      </button>
+                    )}
                   </div>
-                </div>
 
-                {/* 3. Catalog Stores checkboxes */}
-                <div className="space-y-3">
-                  <label className="block text-sm font-bold text-[var(--color-slate-700)]">
-                    Tiendas Activas del Catálogo Chile
-                  </label>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                    {KNOWN_STORES.map((store) => {
-                      const isActive = activeStores.includes(store.domain);
-                      return (
+                  <div className="p-6 space-y-6">
+                    {/* 1. Environment Name */}
+                    <div className="space-y-2">
+                      <label className="block text-sm font-bold text-[var(--color-slate-700)]">
+                        Nombre del Entorno
+                      </label>
+                      <input
+                        type="text"
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        placeholder="Ej: Mi Entorno de Perfumerías..."
+                        className="w-full h-11 px-4 bg-[var(--color-slate-50)] border border-[var(--color-slate-200)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--color-primary-100)] text-sm"
+                        disabled={isSaving}
+                      />
+                    </div>
+
+                    {/* 2. Mode Selection */}
+                    <div className="space-y-2">
+                      <label className="block text-sm font-bold text-[var(--color-slate-700)] flex items-center gap-1.5">
+                        Modo del Entorno
+                        <span title="Autónomo: PriceScout selecciona dinámicamente las tiendas relevantes de tu lista activa según el tipo de producto. Manual: Busca estrictamente en todas las tiendas activas sin importar la categoría.">
+                          <HelpCircle size={14} className="text-[var(--color-slate-400)] cursor-help" />
+                        </span>
+                      </label>
+                      <div className="grid grid-cols-2 gap-4">
                         <button
                           type="button"
-                          key={store.domain}
-                          onClick={() => toggleStore(store.domain)}
-                          className={`flex items-center gap-3 p-3 rounded-xl border text-xs font-semibold cursor-pointer transition-all ${
-                            isActive
+                          onClick={() => setMode("autonomous")}
+                          className={`p-4 border rounded-xl font-semibold text-xs flex flex-col gap-1 cursor-pointer transition-all ${
+                            mode === "autonomous"
                               ? "border-[var(--color-primary-600)] bg-[var(--color-primary-50)] text-[var(--color-primary-700)]"
-                              : "border-[var(--color-slate-100)] bg-[var(--color-slate-50)] text-[var(--color-slate-600)] opacity-70"
+                              : "border-[var(--color-slate-200)] bg-white text-[var(--color-slate-500)]"
                           }`}
                           disabled={isSaving}
                         >
-                          <img 
-                            src={`https://www.google.com/s2/favicons?sz=64&domain=${store.domain}`} 
-                            alt={store.name}
-                            className="w-4 h-4 rounded object-contain"
-                          />
-                          <span className="flex-1 text-left truncate">{store.name}</span>
-                          {isActive && <Check size={14} className="stroke-[3] flex-shrink-0" />}
+                          <span className="flex items-center gap-1.5 font-bold">
+                            <Sparkles size={14} /> Modo Autónomo
+                          </span>
+                          <span className="text-[10px] opacity-80 font-normal">
+                            Rastreo dinámico inteligente según el producto
+                          </span>
                         </button>
-                      );
-                    })}
+
+                        <button
+                          type="button"
+                          onClick={() => setMode("manual")}
+                          className={`p-4 border rounded-xl font-semibold text-xs flex flex-col gap-1 cursor-pointer transition-all ${
+                            mode === "manual"
+                              ? "border-[var(--color-primary-600)] bg-[var(--color-primary-50)] text-[var(--color-primary-700)]"
+                              : "border-[var(--color-slate-200)] bg-white text-[var(--color-slate-500)]"
+                          }`}
+                          disabled={isSaving}
+                        >
+                          <span className="flex items-center gap-1.5 font-bold">
+                            <Layers size={14} /> Modo Manual
+                          </span>
+                          <span className="text-[10px] opacity-80 font-normal">
+                            Rastrea estrictamente en todas tus tiendas activas
+                          </span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Mode description banner */}
+                    {mode === "autonomous" ? (
+                      <div className="bg-[var(--color-primary-50)] border border-[var(--color-primary-100)] rounded-xl p-4 text-xs text-[var(--color-primary-800)] font-body flex items-start gap-2.5">
+                        <Sparkles size={16} className="text-[var(--color-primary-600)] shrink-0 mt-0.5" />
+                        <div className="space-y-1">
+                          <p className="font-bold">✨ Modo Autónomo Activo</p>
+                          <p className="opacity-90 leading-relaxed">
+                            PriceScout buscará y comparará precios de forma inteligente en <strong>todo el catálogo nacional</strong>. El motor decidirá qué tiendas consultar dinámicamente según el producto buscado. No se limita a las tiendas seleccionadas.
+                          </p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="bg-amber-50 border border-amber-100 rounded-xl p-4 text-xs text-amber-800 font-body flex items-start gap-2.5">
+                        <Layers size={16} className="text-amber-600 shrink-0 mt-0.5" />
+                        <div className="space-y-1">
+                          <p className="font-bold">⚙️ Modo Manual Activo</p>
+                          <p className="opacity-90 leading-relaxed">
+                            La búsqueda se limitará <strong>estrictamente</strong> a las tiendas seleccionadas en el catálogo de abajo. Ninguna otra tienda será consultada.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 3. Catalog Stores checkboxes */}
+                    <div className="space-y-3">
+                      <label className="block text-sm font-bold text-[var(--color-slate-700)]">
+                        Tiendas Activas del Catálogo Chile
+                      </label>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                        {KNOWN_STORES.map((store) => {
+                          const isActive = activeStores.includes(store.domain);
+                          return (
+                            <button
+                              type="button"
+                              key={store.domain}
+                              onClick={() => toggleStore(store.domain)}
+                              className={`flex items-center gap-3 p-3 rounded-xl border text-xs font-semibold cursor-pointer transition-all ${
+                                isActive
+                                  ? "border-[var(--color-primary-600)] bg-[var(--color-primary-50)] text-[var(--color-primary-700)]"
+                                  : "border-[var(--color-slate-100)] bg-[var(--color-slate-50)] text-[var(--color-slate-600)] opacity-70"
+                              }`}
+                              disabled={isSaving}
+                            >
+                              <img 
+                                src={`https://www.google.com/s2/favicons?sz=64&domain=${store.domain}`} 
+                                alt={store.name}
+                                className="w-4 h-4 rounded object-contain"
+                              />
+                              <span className="flex-1 text-left truncate">{store.name}</span>
+                              {isActive && <Check size={14} className="stroke-[3] flex-shrink-0" />}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* 4. Custom domains for Business Plan */}
+                    <div className="space-y-2 pt-4 border-t border-[var(--color-slate-100)]">
+                      <div className="flex items-center justify-between flex-wrap gap-2">
+                        <label className="block text-sm font-bold text-[var(--color-slate-700)] flex items-center gap-1.5">
+                          Tiendas Personalizadas Adicionales (Exclusivo Business)
+                        </label>
+                        <span className="px-2 py-0.5 bg-purple-100 text-purple-700 text-[10px] font-bold rounded-full uppercase tracking-wider animate-pulse">
+                          Business
+                        </span>
+                      </div>
+                      <p className="text-xs text-[var(--color-slate-400)] leading-relaxed font-body mb-3">
+                        Ingresa los dominios de cualquier sitio e-commerce que NO esté en el catálogo principal, separados por coma (ej: `eliteperfumes.cl, aromas.cl`). Nuestro motor de IA se encargará de extraer la información de forma universal.
+                      </p>
+                      
+                      {!canAddCustomStores ? (
+                        <div className="bg-purple-50/50 border border-purple-100 rounded-xl p-4 space-y-3">
+                          <input
+                            type="text"
+                            value=""
+                            placeholder="ejemplo.cl, mi-competencia.cl..."
+                            className="w-full h-11 px-4 bg-[var(--color-slate-100)] border border-[var(--color-slate-200)] rounded-xl focus:outline-none text-sm text-[var(--color-slate-400)] cursor-not-allowed"
+                            disabled={true}
+                          />
+                          <div className="flex items-center justify-between flex-wrap gap-2 text-xs">
+                            <span className="text-purple-700 font-semibold font-body">
+                              ✨ Requiere el plan Business para añadir tiendas ilimitadas.
+                            </span>
+                            <Link
+                              href="/dashboard/billing"
+                              className="text-purple-700 font-bold hover:text-purple-900 underline font-body transition-colors"
+                            >
+                              Actualizar Plan &rarr;
+                            </Link>
+                          </div>
+                        </div>
+                      ) : (
+                        <input
+                          type="text"
+                          value={customDomainsInput}
+                          onChange={(e) => setCustomDomainsInput(e.target.value)}
+                          placeholder="ejemplo.cl, mi-competencia.cl..."
+                          className="w-full h-11 px-4 bg-[var(--color-slate-50)] border border-[var(--color-slate-200)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--color-primary-100)] text-sm"
+                          disabled={isSaving}
+                        />
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Bottom Actions */}
+                  <div className="p-6 bg-[var(--color-slate-50)] border-t border-[var(--color-slate-200)] flex justify-end gap-3">
+                    <button
+                      type="submit"
+                      disabled={isSaving}
+                      className="inline-flex items-center justify-center gap-2 font-bold whitespace-nowrap rounded-xl transition-all h-11 px-6 bg-[var(--color-primary-600)] hover:bg-[var(--color-primary-700)] text-white shadow-[var(--shadow-sm)] hover:shadow-md cursor-pointer disabled:opacity-50 text-sm"
+                    >
+                      <Save size={16} />
+                      Guardar Configuración
+                    </button>
+                  </div>
+                </form>
+              </div>
+
+              {/* Premium Lock Overlay for Gratis & Starter plans */}
+              {!canChooseStores && (
+                <div className="absolute inset-0 flex items-center justify-center p-4 sm:p-6 bg-white/20 backdrop-blur-[1px]">
+                  <div className="max-w-md w-full bg-white rounded-3xl border border-[var(--color-slate-200)] shadow-2xl p-6 sm:p-8 text-center space-y-6 animate-fade-in-up">
+                    <div className="w-14 h-14 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center mx-auto shadow-sm">
+                      <Sparkles size={28} className="animate-pulse" />
+                    </div>
+
+                    <div className="space-y-2">
+                      <h3 className="font-display font-extrabold text-2xl text-[var(--color-slate-900)] tracking-tight">
+                        Entornos Personalizados
+                      </h3>
+                      <p className="text-sm text-[var(--color-slate-500)] leading-relaxed font-body">
+                        Lleva tu inteligencia competitiva al siguiente nivel. Crea entornos de búsqueda a la medida, selecciona tus tiendas clave y controla cómo la IA procesa cada consulta.
+                      </p>
+                    </div>
+
+                    <div className="bg-[var(--color-slate-50)] border border-[var(--color-slate-100)] rounded-2xl p-4 text-left space-y-3">
+                      <div className="flex items-center gap-2.5 text-xs text-[var(--color-slate-700)] font-semibold font-body">
+                        <Check size={14} className="text-purple-600 shrink-0" />
+                        <span>Filtro de tiendas del catálogo de Chile</span>
+                      </div>
+                      <div className="flex items-center gap-2.5 text-xs text-[var(--color-slate-700)] font-semibold font-body">
+                        <Check size={14} className="text-purple-600 shrink-0" />
+                        <span>Modo Autónomo inteligente vs Manual estricto</span>
+                      </div>
+                      <div className="flex items-center gap-2.5 text-xs text-[var(--color-slate-700)] font-semibold font-body">
+                        <Check size={14} className="text-purple-600 shrink-0" />
+                        <span>Búsquedas ilimitadas e historial extendido</span>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row gap-3 pt-2">
+                      <button
+                        onClick={() => window.location.href = "/dashboard/billing"}
+                        className="flex-1 py-3 px-4 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-bold text-center rounded-xl text-sm transition-all shadow-md hover:shadow-lg cursor-pointer flex items-center justify-center gap-2"
+                      >
+                        <span>Actualizar Plan</span>
+                      </button>
+                      <button
+                        onClick={() => window.location.href = "/#pricing"}
+                        className="flex-1 py-3 px-4 bg-[var(--color-slate-100)] hover:bg-[var(--color-slate-200)] text-[var(--color-slate-700)] font-bold text-center rounded-xl text-sm transition-all cursor-pointer"
+                      >
+                        <span>Comparar Planes</span>
+                      </button>
+                    </div>
+
+                    <p className="text-[10px] text-[var(--color-slate-400)] font-body font-medium">
+                      Disponible desde el Plan Pro por solo $12.990/mes.
+                    </p>
                   </div>
                 </div>
-
-                {/* 4. Custom domains for Business Plan */}
-                 <div className="space-y-2 pt-4 border-t border-[var(--color-slate-100)]">
-                   <div className="flex items-center justify-between flex-wrap gap-2">
-                     <label className="block text-sm font-bold text-[var(--color-slate-700)] flex items-center gap-1.5">
-                       Tiendas Personalizadas Adicionales (Exclusivo Business)
-                     </label>
-                     <span className="px-2 py-0.5 bg-purple-100 text-purple-700 text-[10px] font-bold rounded-full uppercase tracking-wider animate-pulse">
-                       Business
-                     </span>
-                   </div>
-                   <p className="text-xs text-[var(--color-slate-400)] leading-relaxed font-body mb-3">
-                     Ingresa los dominios de cualquier sitio e-commerce que NO esté en el catálogo principal, separados por coma (ej: `eliteperfumes.cl, aromas.cl`). Nuestro motor de IA se encargará de extraer la información de forma universal.
-                   </p>
-                   
-                   {!canAddCustomStores ? (
-                     <div className="bg-purple-50/50 border border-purple-100 rounded-xl p-4 space-y-3">
-                       <input
-                         type="text"
-                         value=""
-                         placeholder="ejemplo.cl, mi-competencia.cl..."
-                         className="w-full h-11 px-4 bg-[var(--color-slate-100)] border border-[var(--color-slate-200)] rounded-xl focus:outline-none text-sm text-[var(--color-slate-400)] cursor-not-allowed"
-                         disabled={true}
-                       />
-                       <div className="flex items-center justify-between flex-wrap gap-2 text-xs">
-                         <span className="text-purple-700 font-semibold font-body">
-                           ✨ Requiere el plan Business para añadir tiendas ilimitadas.
-                         </span>
-                         <Link
-                           href="/dashboard/billing"
-                           className="text-purple-700 font-bold hover:text-purple-900 underline font-body transition-colors"
-                         >
-                           Actualizar Plan &rarr;
-                         </Link>
-                       </div>
-                     </div>
-                   ) : (
-                     <input
-                       type="text"
-                       value={customDomainsInput}
-                       onChange={(e) => setCustomDomainsInput(e.target.value)}
-                       placeholder="ejemplo.cl, mi-competencia.cl..."
-                       className="w-full h-11 px-4 bg-[var(--color-slate-50)] border border-[var(--color-slate-200)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--color-primary-100)] text-sm"
-                       disabled={isSaving}
-                     />
-                   )}
-                 </div>
-              </div>
-
-              {/* Bottom Actions */}
-              <div className="p-6 bg-[var(--color-slate-50)] border-t border-[var(--color-slate-200)] flex justify-end gap-3">
-                <button
-                  type="submit"
-                  disabled={isSaving}
-                  className="inline-flex items-center justify-center gap-2 font-bold whitespace-nowrap rounded-xl transition-all h-11 px-6 bg-[var(--color-primary-600)] hover:bg-[var(--color-primary-700)] text-white shadow-[var(--shadow-sm)] hover:shadow-md cursor-pointer disabled:opacity-50 text-sm"
-                >
-                  <Save size={16} />
-                  Guardar Configuración
-                </button>
-              </div>
-            </form>
+              )}
+            </div>
           </div>
         </div>
       )}

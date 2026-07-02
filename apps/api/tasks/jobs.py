@@ -346,13 +346,18 @@ def run_autonomous_search(self, search_id: str):
             try:
                 env_res = execute_with_retry(
                     supabase_writer.table("environments")
-                    .select("store_domains, custom_domains")
+                    .select("mode, store_domains, custom_domains")
                     .eq("id", environment_id)
                 )
                 if env_res.data:
-                    store_domains = env_res.data[0].get("store_domains") or []
-                    custom_domains = env_res.data[0].get("custom_domains") or []
-                    allowed_domains = {d.strip().lower() for d in (store_domains + custom_domains) if d.strip()}
+                    env_mode = env_res.data[0].get("mode") or "autonomous"
+                    if env_mode == "manual":
+                        store_domains = env_res.data[0].get("store_domains") or []
+                        custom_domains = env_res.data[0].get("custom_domains") or []
+                        allowed_domains = {d.strip().lower() for d in (store_domains + custom_domains) if d.strip()}
+                    else:
+                        # Modo Autónomo: no filtrar de forma estricta por dominios (buscar en todo el catálogo)
+                        allowed_domains = None
             except Exception as env_err:
                 logger.error(f"Error fetching environment domains in search task: {env_err}")
 

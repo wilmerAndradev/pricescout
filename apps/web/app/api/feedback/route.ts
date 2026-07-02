@@ -9,7 +9,7 @@ import { NextResponse } from "next/server";
 
 export async function POST(request: Request) {
   try {
-    const { name, contact, message } = await request.json();
+    const { name, contact, message, type = "bug" } = await request.json();
 
     if (!name || !contact || !message) {
       return NextResponse.json(
@@ -18,10 +18,12 @@ export async function POST(request: Request) {
       );
     }
 
-    const recipientEmail = "wilmerandrade40@gmail.com";
+    const recipientEmail = process.env.FEEDBACK_RECIPIENT_EMAIL || "wilmerandrade40@gmail.com";
+    const isContact = type === "contact";
+    const subject = isContact ? "Nueva Consulta de Contacto - PriceScout" : "Reporte de Error / Feedback - PriceScout";
 
     // Log the feedback receipt on the server console (confidential)
-    console.log(`[FEEDBACK] Enviando reporte a ${recipientEmail} | Nombre/Org: ${name} | Remitente: ${contact} | Mensaje: ${message}`);
+    console.log(`[FEEDBACK] Enviando ${type} a ${recipientEmail} | Nombre/Org: ${name} | Remitente: ${contact} | Mensaje: ${message}`);
 
     // If Resend API key is configured in the environment, use it to send the real email
     const resendApiKey = process.env.RESEND_API_KEY;
@@ -36,15 +38,15 @@ export async function POST(request: Request) {
           body: JSON.stringify({
             from: "feedback@pricescout.cl",
             to: recipientEmail,
-            subject: "Reporte de Error / Feedback - PriceScout",
+            subject: subject,
             html: `
-              <h3>Nuevo Reporte de Error en PriceScout</h3>
+              <h3>${isContact ? "Nueva Consulta de Contacto en PriceScout" : "Nuevo Reporte de Error en PriceScout"}</h3>
               <p><strong>Nombre / Organización:</strong> ${name}</p>
               <p><strong>Remitente (Contacto):</strong> ${contact}</p>
               <p><strong>Mensaje:</strong></p>
               <p style="white-space: pre-wrap; background-color: #f8fafc; padding: 12px; border-radius: 8px; border: 1px solid #e2e8f0;">${message}</p>
               <br/>
-              <p style="color: #64748b; font-size: 11px;">Enviado automáticamente desde el formulario de soporte de PriceScout.</p>
+              <p style="color: #64748b; font-size: 11px;">Enviado automáticamente desde el formulario de ${isContact ? "contacto" : "soporte"} de PriceScout.</p>
             `,
           }),
         });

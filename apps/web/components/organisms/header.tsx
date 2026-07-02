@@ -156,7 +156,6 @@ export function Header({ displayName: initialDisplayName, initials: initialIniti
             {loading ? (
               <div className="h-8 w-32 bg-[var(--color-slate-100)] animate-pulse rounded-lg" />
             ) : user ? (
-              /* Authenticated User Menu Dropdown (O-01 Unified Design) */
               <div className="relative">
                 <button
                   onClick={() => setIsProfileDropdownOpen(!isProfileDropdownOpen)}
@@ -243,7 +242,6 @@ export function Header({ displayName: initialDisplayName, initials: initialIniti
                 )}
               </div>
             ) : (
-              /* Guest Actions */
               <div className="flex items-center gap-3">
                 <Link 
                   href="/login" 

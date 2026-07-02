@@ -90,7 +90,27 @@
   --radius-full: var(--radius-full);
 
   /* Animations */
+  --animate-ring-bell: ring-bell 1.8s ease-in-out infinite;
   --animate-fade-in: fade-in 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+
+  @keyframes ring-bell {
+    0%, 80%, 100% { transform: rotate(0) scale(1); }
+    5% { transform: rotate(24deg) scale(1.2); }
+    10% { transform: rotate(-24deg) scale(1.2); }
+    15% { transform: rotate(22deg) scale(1.2); }
+    20% { transform: rotate(-22deg) scale(1.2); }
+    25% { transform: rotate(18deg) scale(1.2); }
+    30% { transform: rotate(-18deg) scale(1.2); }
+    35% { transform: rotate(15deg) scale(1.15); }
+    40% { transform: rotate(-15deg) scale(1.15); }
+    45% { transform: rotate(12deg) scale(1.15); }
+    50% { transform: rotate(-12deg) scale(1.1); }
+    55% { transform: rotate(10deg) scale(1.1); }
+    60% { transform: rotate(-10deg) scale(1.1); }
+    65% { transform: rotate(6deg) scale(1.05); }
+    70% { transform: rotate(-6deg) scale(1.05); }
+    75% { transform: rotate(0) scale(1); }
+  }
 
   @keyframes fade-in {
     from {
@@ -127,4 +147,9 @@ body {
 .focus-ring:focus-visible {
   outline: none;
   box-shadow: var(--shadow-focus);
+}
+
+.animate-ring-bell {
+  display: inline-block;
+  transform-origin: top center;
 }

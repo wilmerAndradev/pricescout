@@ -104,9 +104,8 @@ export default function LoginPage() {
         <Button
           type="button"
           variant="secondary"
-          className="w-full flex items-center justify-center gap-2 h-11"
-          onClick={handleGoogleLogin}
-          disabled={isPending}
+          className="w-full flex items-center justify-center gap-2 h-11 blur-[1.5px] opacity-50 cursor-not-allowed select-none pointer-events-none"
+          disabled={true}
         >
           <svg className="w-5 h-5 flex-shrink-0" viewBox="0 0 24 24">
             <path

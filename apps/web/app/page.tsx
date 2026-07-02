@@ -23,6 +23,18 @@ export default function LandingPage() {
   const [user, setUser] = React.useState<any>(null);
   const [guestSearchCount, setGuestSearchCount] = React.useState(0);
   const [showLimitModal, setShowLimitModal] = React.useState(false);
+  const [billingPeriod, setBillingPeriod] = React.useState<"monthly" | "yearly">("monthly");
+  const [mousePos, setMousePos] = React.useState({ x: 100, y: 50 });
+  const textRef = React.useRef<HTMLSpanElement>(null);
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!textRef.current) return;
+    const rect = textRef.current.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * 100;
+    const y = ((e.clientY - rect.top) / rect.height) * 100;
+    setMousePos({ x, y });
+  };
+
   const router = useRouter();
 
   const [stats, setStats] = React.useState({
@@ -64,10 +76,10 @@ export default function LandingPage() {
 
   // Chips for instant search recommendations
   const recommendationChips = [
-    "Cafetera Oster 12 tazas",
     "Sauvage Dior 100ml",
-    "Notebook Gamer ASUS",
-    "Nike Air Max 90"
+    "Tommy Hilfiger Girl EDT 100ml",
+    "One Million Paco Rabanne",
+    "Carolina Herrera Good Girl 80ml"
   ];
 
   const handleChipClick = (chip: string) => {
@@ -155,9 +167,20 @@ export default function LandingPage() {
             </div>
 
             {/* Headline */}
-            <h1 className="font-display font-extrabold text-5xl md:text-6xl text-[var(--color-slate-900)] tracking-tight leading-[1.1] mb-6">
+            <h1 
+              onMouseMove={handleMouseMove}
+              className="font-display font-extrabold text-5xl md:text-6xl text-[var(--color-slate-900)] tracking-tight leading-[1.1] mb-6"
+            >
               Monitorea y compara <br />
-              <span className="bg-clip-text text-transparent bg-gradient-to-r from-[var(--color-primary-600)] to-[var(--color-accent-600)]">
+              <span 
+                ref={textRef}
+                className="bg-clip-text text-transparent transition-[background-position] duration-75 select-none"
+                style={{
+                  backgroundImage: `radial-gradient(circle at ${mousePos.x}% ${mousePos.y}%, var(--color-accent-600) 0%, var(--color-primary-600) 75%)`,
+                  backgroundClip: "text",
+                  WebkitBackgroundClip: "text",
+                }}
+              >
                 tus tiendas preferidas
               </span> al instante
             </h1>
@@ -167,16 +190,18 @@ export default function LandingPage() {
               Escribe un producto para comparar precios, stock e imágenes en tiempo real. Personaliza tu monitoreo y sigue la evolución de valores en los principales comercios de Chile.
             </p>
 
-            {/* Big Search Bar */}
             <div className="max-w-2xl mx-auto mb-6">
-              <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-3 p-2 bg-white rounded-2xl border border-[var(--color-slate-200)] shadow-[var(--shadow-md)] focus-within:ring-2 focus-within:ring-[var(--color-primary-100)] focus-within:border-[var(--color-primary-600)] transition-all">
+              <form 
+                onSubmit={handleSubmit} 
+                className="flex flex-col sm:flex-row gap-3 p-2 bg-white rounded-2xl border border-[var(--color-slate-200)] shadow-[var(--shadow-sm)] focus-within:ring-2 focus-within:ring-[var(--color-primary-100)] focus-within:border-[var(--color-primary-600)] transition-all duration-200"
+              >
                 <div className="flex-1 flex items-center gap-3 px-3 min-h-[50px]">
                   <Search size={22} className="text-[var(--color-slate-400)] flex-shrink-0" />
                   <input 
                     type="text"
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
-                    placeholder="¿Qué producto buscas? Ej: Cafetera Oster 12 tazas..."
+                    placeholder="Ingresa una fragancia o marca... Ej: Sauvage Dior, Bleu de Chanel, One Million..."
                     className="w-full bg-transparent border-0 outline-none text-[var(--color-slate-900)] font-body text-base placeholder-[var(--color-slate-400)] min-h-[40px]"
                     disabled={isLoading}
                   />
@@ -344,173 +369,251 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* ── Pricing Section (Freemium) ────────────────────── */}
-        <section className="py-20 px-6 bg-[var(--background)]">
-          <div className="max-w-7xl mx-auto">
-            <div className="text-center max-w-2xl mx-auto mb-16">
-              <h2 className="font-display font-extrabold text-3xl md:text-4xl text-[var(--color-slate-900)] tracking-tight mb-4">
-                Planes adaptados a tus necesidades
+        {/* ── Pricing Section (Dynamic & Highly Optimized) ────────────────────── */}
+        <section id="pricing" className="py-24 px-6 bg-[var(--background)] relative overflow-hidden">
+          {/* Ambient Background Glows */}
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-7xl h-full -z-10 opacity-40 blur-3xl pointer-events-none bg-gradient-to-r from-blue-100 via-purple-100 to-emerald-50 rounded-full" />
+
+          <div className="max-w-7xl mx-auto relative z-10">
+            <div className="text-center max-w-2xl mx-auto mb-12">
+              <span className="px-3 py-1 rounded-full bg-[var(--color-primary-100)] text-[var(--color-primary-700)] text-xs font-bold uppercase tracking-wider mb-4 inline-block">
+                Suscripciones y Licencias
+              </span>
+              <h2 className="font-display font-extrabold text-3xl md:text-5xl text-[var(--color-slate-900)] tracking-tight mb-4">
+                Planes adaptados a tu escala
               </h2>
-              <p className="text-[var(--color-slate-500)] text-lg">
-                Usa el buscador gratis o desbloquea el monitoreo profesional para tu marca.
+              <p className="text-[var(--color-slate-500)] text-lg font-body">
+                Accede a inteligencia de precios y monitoreo competitivo en tiempo real. Elige la cobertura ideal para tus requerimientos individuales o corporativos.
               </p>
             </div>
 
-            <div className="grid md:grid-cols-4 gap-6">
-              {/* Plan Gratis */}
-              <div className="p-8 rounded-2xl bg-white border border-[var(--color-slate-200)] flex flex-col justify-between shadow-[var(--shadow-sm)]">
+            {/* Billing Cycle Switcher */}
+            <div className="flex justify-center mb-16">
+              <div className="relative flex items-center p-1.5 bg-[var(--color-slate-100)] rounded-full border border-[var(--color-slate-200)] shadow-[var(--shadow-xs)]">
+                <button
+                  onClick={() => setBillingPeriod("monthly")}
+                  className={`px-6 py-2.5 text-xs font-bold rounded-full transition-all duration-300 cursor-pointer ${
+                    billingPeriod === "monthly"
+                      ? "bg-white text-[var(--color-primary-700)] shadow-sm"
+                      : "text-[var(--color-slate-500)] hover:text-[var(--color-slate-800)]"
+                  }`}
+                >
+                  Mensual
+                </button>
+                <button
+                  onClick={() => setBillingPeriod("yearly")}
+                  className={`px-6 py-2.5 text-xs font-bold rounded-full transition-all duration-300 flex items-center gap-1.5 cursor-pointer ${
+                    billingPeriod === "yearly"
+                      ? "bg-white text-[var(--color-primary-700)] shadow-sm"
+                      : "text-[var(--color-slate-500)] hover:text-[var(--color-slate-800)]"
+                  }`}
+                >
+                  Anual
+                  <span className="px-2 py-0.5 text-[9px] font-black bg-emerald-100 text-emerald-800 rounded-full uppercase tracking-wider">
+                    Ahorra 20%
+                  </span>
+                </button>
+              </div>
+            </div>
+
+            {/* Grid of 4 Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 items-stretch">
+              
+              {/* Card 1: Gratis */}
+              <div className="p-8 rounded-3xl bg-white border border-[var(--color-slate-200)] flex flex-col justify-between shadow-[var(--shadow-xs)] hover:shadow-[var(--shadow-md)] transition-all duration-300 group hover:-translate-y-1">
                 <div>
-                  <h3 className="font-display font-bold text-lg text-[var(--color-slate-900)] mb-2">Gratis</h3>
-                  <p className="text-xs text-[var(--color-slate-400)] mb-6">Para consumidores ocasionales</p>
+                  <h3 className="font-display font-extrabold text-xl text-[var(--color-slate-900)] mb-1">Gratis</h3>
+                  <p className="text-xs text-[var(--color-slate-400)] mb-6 min-h-[32px]">Para consumidores y pruebas ocasionales</p>
+                  
                   <div className="mb-6">
-                    <span className="font-display font-extrabold text-3xl text-[var(--color-slate-900)]">$0</span>
-                    <span className="text-sm text-[var(--color-slate-500)]"> / mes</span>
+                    <span className="font-display font-black text-4xl text-[var(--color-slate-900)]">$0</span>
+                    <span className="text-xs text-[var(--color-slate-400)] font-semibold"> / mes</span>
+                    <span className="block text-[10px] text-transparent mt-1 select-none">Bypass spacing</span>
                   </div>
-                  <ul className="space-y-3 mb-8">
+
+                  <div className="w-full h-px bg-[var(--color-slate-100)] mb-6" />
+
+                  <ul className="space-y-4 mb-8">
                     <li className="flex items-start gap-2.5 text-sm text-[var(--color-slate-600)]">
-                      <Check size={16} className="text-green-600 mt-0.5 flex-shrink-0" />
-                      10 búsquedas al mes
+                      <Check size={16} className="text-emerald-500 mt-0.5 flex-shrink-0" />
+                      <span>10 búsquedas al mes</span>
                     </li>
                     <li className="flex items-start gap-2.5 text-sm text-[var(--color-slate-600)]">
-                      <Check size={16} className="text-green-600 mt-0.5 flex-shrink-0" />
-                      Busca en hasta 5 tiendas
+                      <Check size={16} className="text-emerald-500 mt-0.5 flex-shrink-0" />
+                      <span>Busca en hasta 5 tiendas</span>
                     </li>
                     <li className="flex items-start gap-2.5 text-sm text-[var(--color-slate-600)]">
-                      <Check size={16} className="text-green-600 mt-0.5 flex-shrink-0" />
-                      Resultados con imagen y stock
+                      <Check size={16} className="text-emerald-500 mt-0.5 flex-shrink-0" />
+                      <span>Resultados en tiempo real</span>
                     </li>
                   </ul>
                 </div>
+                
                 <Link 
                   href="/register" 
-                  className="w-full py-3 bg-[var(--color-slate-100)] hover:bg-[var(--color-slate-200)] text-[var(--color-slate-700)] font-bold text-center rounded-xl transition-all text-sm cursor-pointer"
+                  className="w-full py-3 bg-[var(--color-slate-50)] hover:bg-[var(--color-slate-100)] border border-[var(--color-slate-200)] text-[var(--color-slate-700)] font-bold text-center rounded-2xl transition-all text-sm cursor-pointer"
                 >
-                  Empezar Gratis
+                  Empezar gratis
                 </Link>
               </div>
 
-              {/* Plan Starter */}
-              <div className="p-8 rounded-2xl bg-white border border-[var(--color-slate-200)] flex flex-col justify-between shadow-[var(--shadow-sm)]">
+              {/* Card 2: Starter */}
+              <div className="p-8 rounded-3xl bg-white border border-[var(--color-slate-200)] flex flex-col justify-between shadow-[var(--shadow-xs)] hover:shadow-[var(--shadow-md)] transition-all duration-300 group hover:-translate-y-1">
                 <div>
-                  <h3 className="font-display font-bold text-lg text-[var(--color-slate-900)] mb-2">Starter</h3>
-                  <p className="text-xs text-[var(--color-slate-400)] mb-6">Para compradores entusiastas</p>
+                  <h3 className="font-display font-extrabold text-xl text-[var(--color-slate-900)] mb-1">Starter</h3>
+                  <p className="text-xs text-[var(--color-slate-400)] mb-6 min-h-[32px]">Para compradores entusiastas y frecuentes</p>
+                  
                   <div className="mb-6">
-                    <span className="font-display font-extrabold text-3xl text-[var(--color-slate-900)]">$4.990</span>
-                    <span className="text-sm text-[var(--color-slate-500)]"> / mes</span>
+                    <span className="font-display font-black text-4xl text-[var(--color-slate-900)]">
+                      {billingPeriod === "monthly" ? "$4.990" : "$3.990"}
+                    </span>
+                    <span className="text-xs text-[var(--color-slate-400)] font-semibold"> / mes</span>
+                    {billingPeriod === "yearly" ? (
+                      <span className="block text-[10px] text-emerald-600 font-bold mt-1">
+                        Facturado anual ($47.880)
+                      </span>
+                    ) : (
+                      <span className="block text-[10px] text-transparent mt-1 select-none">Bypass spacing</span>
+                    )}
                   </div>
-                  <ul className="space-y-3 mb-8">
+
+                  <div className="w-full h-px bg-[var(--color-slate-100)] mb-6" />
+
+                  <ul className="space-y-4 mb-8">
                     <li className="flex items-start gap-2.5 text-sm text-[var(--color-slate-600)]">
-                      <Check size={16} className="text-green-600 mt-0.5 flex-shrink-0" />
-                      100 búsquedas al mes
+                      <Check size={16} className="text-emerald-500 mt-0.5 flex-shrink-0" />
+                      <span>100 búsquedas al mes</span>
                     </li>
                     <li className="flex items-start gap-2.5 text-sm text-[var(--color-slate-600)]">
-                      <Check size={16} className="text-green-600 mt-0.5 flex-shrink-0" />
-                      Busca en hasta 10 tiendas
+                      <Check size={16} className="text-emerald-500 mt-0.5 flex-shrink-0" />
+                      <span>Busca en hasta 10 tiendas</span>
                     </li>
                     <li className="flex items-start gap-2.5 text-sm text-[var(--color-slate-600)]">
-                      <Check size={16} className="text-green-600 mt-0.5 flex-shrink-0" />
-                      Monitorea 20 productos
+                      <Check size={16} className="text-emerald-500 mt-0.5 flex-shrink-0" />
+                      <span>Monitorea 20 productos</span>
                     </li>
                     <li className="flex items-start gap-2.5 text-sm text-[var(--color-slate-600)]">
-                      <Check size={16} className="text-green-600 mt-0.5 flex-shrink-0" />
-                      5 alertas de precio activas
+                      <Check size={16} className="text-emerald-500 mt-0.5 flex-shrink-0" />
+                      <span>5 alertas de precio activas</span>
                     </li>
                   </ul>
                 </div>
+                
                 <Link 
                   href="/register" 
-                  className="w-full py-3 bg-[var(--color-slate-100)] hover:bg-[var(--color-slate-200)] text-[var(--color-slate-700)] font-bold text-center rounded-xl transition-all text-sm cursor-pointer"
+                  className="w-full py-3 bg-white hover:bg-[var(--color-slate-50)] border border-[var(--color-primary-600)] text-[var(--color-primary-600)] font-bold text-center rounded-2xl transition-all text-sm cursor-pointer shadow-sm hover:shadow"
                 >
                   Elegir Starter
                 </Link>
               </div>
 
-              {/* Plan Pro (Destacado) */}
-              <div className="p-8 rounded-2xl bg-white border-2 border-[var(--color-primary-600)] flex flex-col justify-between shadow-[var(--shadow-md)] relative">
-                <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-[var(--color-primary-600)] text-white text-xs font-bold uppercase tracking-wider">
+              {/* Card 3: Pro (Destacado) */}
+              <div className="p-8 rounded-3xl bg-white border-2 border-[var(--color-primary-600)] flex flex-col justify-between shadow-[0_20px_50px_rgba(37,99,235,0.08)] relative transition-all duration-300 group hover:-translate-y-2 hover:shadow-[0_25px_60px_rgba(37,99,235,0.12)]">
+                <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 px-4 py-1 rounded-full bg-[var(--color-primary-600)] text-white text-[10px] font-black uppercase tracking-widest shadow-md">
                   Recomendado
                 </div>
                 <div>
-                  <h3 className="font-display font-bold text-lg text-[var(--color-slate-900)] mb-2">Pro</h3>
-                  <p className="text-xs text-[var(--color-slate-400)] mb-6">Para marcas, pymes e importadores</p>
+                  <h3 className="font-display font-extrabold text-xl text-[var(--color-slate-900)] mb-1">Pro</h3>
+                  <p className="text-xs text-[var(--color-slate-400)] mb-6 min-h-[32px]">Para marcas, importadores y pymes</p>
+                  
                   <div className="mb-6">
-                    <span className="font-display font-extrabold text-3xl text-[var(--color-slate-900)]">$12.990</span>
-                    <span className="text-sm text-[var(--color-slate-500)]"> / mes</span>
+                    <span className="font-display font-black text-4xl text-[var(--color-slate-900)]">
+                      {billingPeriod === "monthly" ? "$12.990" : "$10.390"}
+                    </span>
+                    <span className="text-xs text-[var(--color-slate-400)] font-semibold"> / mes</span>
+                    {billingPeriod === "yearly" ? (
+                      <span className="block text-[10px] text-emerald-600 font-bold mt-1">
+                        Facturado anual ($124.680)
+                      </span>
+                    ) : (
+                      <span className="block text-[10px] text-transparent mt-1 select-none">Bypass spacing</span>
+                    )}
                   </div>
-                  <ul className="space-y-3 mb-8">
+
+                  <div className="w-full h-px bg-[var(--color-slate-100)] mb-6" />
+
+                  <ul className="space-y-4 mb-8">
                     <li className="flex items-start gap-2.5 text-sm text-[var(--color-slate-600)]">
-                      <Check size={16} className="text-green-600 mt-0.5 flex-shrink-0" />
-                      Búsquedas ilimitadas
+                      <Check size={16} className="text-emerald-500 mt-0.5 flex-shrink-0" />
+                      <span className="font-semibold text-[var(--color-slate-900)]">Búsquedas ilimitadas</span>
                     </li>
                     <li className="flex items-start gap-2.5 text-sm text-[var(--color-slate-600)]">
-                      <Check size={16} className="text-green-600 mt-0.5 flex-shrink-0" />
-                      Busca en hasta 20 tiendas
+                      <Check size={16} className="text-emerald-500 mt-0.5 flex-shrink-0" />
+                      <span className="font-semibold text-[var(--color-slate-900)]">Sin límite de tiendas</span>
                     </li>
                     <li className="flex items-start gap-2.5 text-sm text-[var(--color-slate-600)]">
-                      <Check size={16} className="text-green-600 mt-0.5 flex-shrink-0" />
-                      Monitorea 100 productos
+                      <Check size={16} className="text-emerald-500 mt-0.5 flex-shrink-0" />
+                      <span>Monitorea 100 productos</span>
                     </li>
                     <li className="flex items-start gap-2.5 text-sm text-[var(--color-slate-600)]">
-                      <Check size={16} className="text-green-600 mt-0.5 flex-shrink-0" />
-                      Alertas de precio ilimitadas
+                      <Check size={16} className="text-emerald-500 mt-0.5 flex-shrink-0" />
+                      <span>Alertas ilimitadas</span>
                     </li>
                     <li className="flex items-start gap-2.5 text-sm text-[var(--color-slate-600)]">
-                      <Check size={16} className="text-green-600 mt-0.5 flex-shrink-0" />
-                      **Panel de Entorno (Elegir tiendas)**
+                      <Check size={16} className="text-emerald-500 mt-0.5 flex-shrink-0" />
+                      <span>Panel de Entorno configurable</span>
                     </li>
                   </ul>
                 </div>
+                
                 <Link 
                   href="/register" 
-                  className="w-full py-3 bg-[var(--color-primary-600)] hover:bg-[var(--color-primary-700)] text-white font-bold text-center rounded-xl transition-all text-sm cursor-pointer shadow-[var(--shadow-sm)]"
+                  className="w-full py-3.5 bg-[var(--color-primary-600)] hover:bg-[var(--color-primary-700)] text-white font-bold text-center rounded-2xl transition-all text-sm cursor-pointer shadow-md hover:shadow-lg hover:scale-[1.02] transform duration-150"
                 >
                   Elegir Pro
                 </Link>
               </div>
 
-              {/* Plan Business */}
-              <div className="p-8 rounded-2xl bg-white border border-[var(--color-slate-200)] flex flex-col justify-between shadow-[var(--shadow-sm)]">
+              {/* Card 4: Business */}
+              <div className="p-8 rounded-3xl bg-white border border-[var(--color-slate-200)] flex flex-col justify-between shadow-[var(--shadow-xs)] hover:shadow-[var(--shadow-md)] transition-all duration-300 group hover:-translate-y-1">
                 <div>
-                  <h3 className="font-display font-bold text-lg text-[var(--color-slate-900)] mb-2">Business</h3>
-                  <p className="text-xs text-[var(--color-slate-400)] mb-6">Para grandes empresas y distribuidoras</p>
+                  <h3 className="font-display font-extrabold text-xl text-[var(--color-slate-900)] mb-1">Business</h3>
+                  <p className="text-xs text-[var(--color-slate-400)] mb-6 min-h-[32px]">Para grandes distribuidoras y corporaciones</p>
+                  
                   <div className="mb-6">
-                    <span className="font-display font-extrabold text-3xl text-[var(--color-slate-900)]">$29.990</span>
-                    <span className="text-sm text-[var(--color-slate-500)]"> / mes</span>
+                    <span className="font-display font-black text-4xl text-[var(--color-slate-900)]">
+                      {billingPeriod === "monthly" ? "$29.990" : "$23.990"}
+                    </span>
+                    <span className="text-xs text-[var(--color-slate-400)] font-semibold"> / mes</span>
+                    {billingPeriod === "yearly" ? (
+                      <span className="block text-[10px] text-emerald-600 font-bold mt-1">
+                        Facturado anual ($287.880)
+                      </span>
+                    ) : (
+                      <span className="block text-[10px] text-transparent mt-1 select-none">Bypass spacing</span>
+                    )}
                   </div>
-                  <ul className="space-y-3 mb-8">
+
+                  <div className="w-full h-px bg-[var(--color-slate-100)] mb-6" />
+
+                  <ul className="space-y-4 mb-8">
                     <li className="flex items-start gap-2.5 text-sm text-[var(--color-slate-600)]">
-                      <Check size={16} className="text-green-600 mt-0.5 flex-shrink-0" />
-                      Búsquedas ilimitadas
+                      <Check size={16} className="text-emerald-500 mt-0.5 flex-shrink-0" />
+                      <span>Monitorea 500 productos</span>
                     </li>
                     <li className="flex items-start gap-2.5 text-sm text-[var(--color-slate-600)]">
-                      <Check size={16} className="text-green-600 mt-0.5 flex-shrink-0" />
-                      Sin límite de tiendas
+                      <Check size={16} className="text-emerald-500 mt-0.5 flex-shrink-0" />
+                      <span>Refresco automático cada 2 horas</span>
                     </li>
                     <li className="flex items-start gap-2.5 text-sm text-[var(--color-slate-600)]">
-                      <Check size={16} className="text-green-600 mt-0.5 flex-shrink-0" />
-                      Monitorea 500 productos
+                      <Check size={16} className="text-emerald-500 mt-0.5 flex-shrink-0" />
+                      <span>Añade tus propios dominios</span>
                     </li>
                     <li className="flex items-start gap-2.5 text-sm text-[var(--color-slate-600)]">
-                      <Check size={16} className="text-green-600 mt-0.5 flex-shrink-0" />
-                      Refresco automático cada 2h
-                    </li>
-                    <li className="flex items-start gap-2.5 text-sm text-[var(--color-slate-600)]">
-                      <Check size={16} className="text-green-600 mt-0.5 flex-shrink-0" />
-                      Añade tus propios dominios
-                    </li>
-                    <li className="flex items-start gap-2.5 text-sm text-[var(--color-slate-600)]">
-                      <Check size={16} className="text-green-600 mt-0.5 flex-shrink-0" />
-                      Soporte dedicado + Acceso API
+                      <Check size={16} className="text-emerald-500 mt-0.5 flex-shrink-0" />
+                      <span>Soporte dedicado + Acceso API</span>
                     </li>
                   </ul>
                 </div>
+                
                 <Link 
                   href="/register" 
-                  className="w-full py-3 bg-[var(--color-slate-100)] hover:bg-[var(--color-slate-200)] text-[var(--color-slate-700)] font-bold text-center rounded-xl transition-all text-sm cursor-pointer"
+                  className="w-full py-3 bg-[var(--color-slate-900)] hover:bg-black text-white font-bold text-center rounded-2xl transition-all text-sm cursor-pointer shadow-sm hover:shadow"
                 >
                   Elegir Business
                 </Link>
               </div>
+
             </div>
 
             {/* Trust Signals */}

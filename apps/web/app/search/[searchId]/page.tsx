@@ -254,6 +254,8 @@ export default function SearchResultsPage() {
   const [searchInput, setSearchInput] = React.useState("");
   const [isSearching, setIsSearching] = React.useState(false);
   const [showLimitModal, setShowLimitModal] = React.useState(false);
+  const [showUpgradeModal, setShowUpgradeModal] = React.useState(false);
+  const [upgradeModalDetail, setUpgradeModalDetail] = React.useState("");
   const [guestSearchCount, setGuestSearchCount] = React.useState(0);
   const [suggestions, setSuggestions] = React.useState<any[]>([]);
   const suggestionsFetchedRef = React.useRef<string | null>(null);
@@ -634,13 +636,22 @@ export default function SearchResultsPage() {
       });
 
       if (!response.ok) {
-        throw new Error("No se pudo crear el proyecto");
+        const errorData = await response.json().catch(() => ({}));
+        const detail = errorData.detail?.detail || errorData.detail?.message || errorData.detail || "No se pudo crear el proyecto";
+        const code = errorData.detail?.code || errorData.code;
+        throw { message: detail, code, status: response.status };
       }
 
       toast.success("Proyecto de monitoreo guardado con éxito", { id: toastId });
       router.push("/dashboard");
     } catch (err: any) {
-      toast.error(err.message || "Error al guardar el proyecto", { id: toastId });
+      toast.dismiss(toastId);
+      if (err.status === 403 || err.code === "PLAN_RESTRICTION" || err.code === "LIMIT_EXCEEDED") {
+        setUpgradeModalDetail(err.message || "Tu plan actual no permite crear proyectos de monitoreo.");
+        setShowUpgradeModal(true);
+      } else {
+        toast.error(err.message || "Error al guardar el proyecto");
+      }
     } finally {
       setIsSaving(false);
     }
@@ -774,8 +785,11 @@ export default function SearchResultsPage() {
               <div className="grid md:grid-cols-3 gap-8 mb-12">
                 {/* Left Side: Store Status List */}
                 <div className="md:col-span-1 bg-white rounded-2xl border border-[var(--color-slate-200)] p-6 shadow-[var(--shadow-sm)] h-fit">
-                  <h3 className="font-display font-bold text-lg text-[var(--color-slate-900)] mb-4 flex items-center gap-2">
-                    <Loader2 size={18} className="animate-spin text-[var(--color-primary-600)]" />
+                  <h3 className="font-display font-bold text-lg text-[var(--color-slate-900)] mb-4 flex items-center gap-2.5">
+                    <div className="relative w-5 h-5 flex items-center justify-center flex-shrink-0">
+                      <div className="absolute inset-0 rounded-full border-2 border-t-[var(--color-primary-600)] border-r-[var(--color-primary-400)] border-b-transparent border-l-transparent animate-spin" />
+                      <img src="/Logo-01.png" alt="logo" className="w-3 h-3 object-contain" />
+                    </div>
                     Buscando en vivo...
                   </h3>
                   <p className="text-xs text-[var(--color-slate-400)] mb-6 font-body leading-relaxed">
@@ -801,7 +815,9 @@ export default function SearchResultsPage() {
                               <Check size={14} className="stroke-[3]" />
                             </div>
                           ) : (
-                            <Loader2 size={16} className="animate-spin text-[var(--color-slate-400)]" />
+                            <div className="relative w-4 h-4 flex items-center justify-center flex-shrink-0">
+                              <div className="absolute inset-0 rounded-full border-2 border-t-[var(--color-primary-600)] border-r-transparent border-b-transparent border-l-transparent animate-spin" />
+                            </div>
                           )}
                         </div>
                       );
@@ -811,12 +827,45 @@ export default function SearchResultsPage() {
 
                 {/* Right Side: Skeletons for Cards */}
                 <div className="md:col-span-2 space-y-6">
-                  <div className="text-center p-12 bg-white rounded-2xl border border-[var(--color-slate-200)] flex flex-col items-center justify-center shadow-[var(--shadow-sm)] animate-pulse">
-                    <Loader2 size={40} className="animate-spin text-[var(--color-primary-600)] mb-4" />
+                  <div className="text-center p-12 bg-white rounded-2xl border border-[var(--color-slate-200)] flex flex-col items-center justify-center shadow-[var(--shadow-sm)]">
+                    <div className="relative w-20 h-20 mb-6 flex items-center justify-center">
+                      <style>{`
+                        @keyframes heartbeat-load {
+                          0% {
+                            transform: scale(0.88);
+                            filter: grayscale(100%) opacity(0.3) drop-shadow(0 0 0 rgba(37,99,235,0));
+                          }
+                          35% {
+                            transform: scale(1.12);
+                            filter: grayscale(0%) opacity(1) drop-shadow(0 0 15px rgba(37,99,235,0.45));
+                          }
+                          50% {
+                            transform: scale(1.02);
+                            filter: grayscale(0%) opacity(1) drop-shadow(0 0 10px rgba(37,99,235,0.3));
+                          }
+                          65% {
+                            transform: scale(1.08);
+                            filter: grayscale(0%) opacity(1) drop-shadow(0 0 12px rgba(37,99,235,0.4));
+                          }
+                          100% {
+                            transform: scale(0.88);
+                            filter: grayscale(100%) opacity(0.3) drop-shadow(0 0 0 rgba(37,99,235,0));
+                          }
+                        }
+                      `}</style>
+                      <img 
+                        src="/Logo-01.png" 
+                        alt="PriceScout Loading" 
+                        className="w-14 h-14 object-contain" 
+                        style={{
+                          animation: 'heartbeat-load 1.8s cubic-bezier(0.25, 0.8, 0.25, 1) infinite'
+                        }}
+                      />
+                    </div>
                     <h3 className="text-xl font-bold text-[var(--color-slate-900)] mb-2 font-display">
                       Extrayendo especificaciones y stock
                     </h3>
-                    <p className="text-sm text-[var(--color-slate-400)] max-w-sm font-body leading-relaxed">
+                    <p className="text-sm text-[var(--color-slate-500)] max-w-sm font-body leading-relaxed">
                       Estamos parseando los precios actuales con Inteligencia Artificial. Esto tomará menos de 20 segundos...
                     </p>
                   </div>
@@ -1390,6 +1439,68 @@ export default function SearchResultsPage() {
               >
                 Ya tengo cuenta (Iniciar Sesión)
               </Link>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Upgrade Modal for Free/Limit Reached Users ── */}
+      {showUpgradeModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-6 animate-fade-in">
+          <div className="bg-white rounded-2xl border border-[var(--color-slate-200)] max-w-md w-full p-8 shadow-[var(--shadow-lg)] relative flex flex-col gap-6">
+            <button 
+              onClick={() => setShowUpgradeModal(false)}
+              className="absolute top-4 right-4 text-[var(--color-slate-400)] hover:text-[var(--color-slate-600)] cursor-pointer"
+            >
+              <X size={20} />
+            </button>
+
+            <div className="text-center space-y-3">
+              <div className="w-12 h-12 rounded-full bg-purple-50 text-purple-600 flex items-center justify-center mx-auto shadow-sm">
+                <Sparkles size={24} className="animate-pulse" />
+              </div>
+              <h3 className="font-display font-extrabold text-2xl text-[var(--color-slate-900)] tracking-tight">
+                Monitoreo Inteligente 24/7
+              </h3>
+              <p className="text-sm text-[var(--color-slate-500)] font-body leading-relaxed">
+                {upgradeModalDetail || "Tu plan actual no incluye la creación de proyectos de monitoreo automático."}
+              </p>
+            </div>
+
+            <div className="bg-[var(--color-slate-50)] border border-[var(--color-slate-100)] rounded-2xl p-4 space-y-2.5 text-left text-xs font-semibold text-[var(--color-slate-700)]">
+              <div className="flex items-center gap-2">
+                <div className="w-1.5 h-1.5 rounded-full bg-purple-600" />
+                <span>Monitoreo automático diario y alertas por email</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-1.5 h-1.5 rounded-full bg-purple-600" />
+                <span>Gráficos detallados de evolución de precios</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-1.5 h-1.5 rounded-full bg-purple-600" />
+                <span>Gestión de múltiples proyectos en paralelo</span>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-2.5 pt-2">
+              <button
+                onClick={() => {
+                  setShowUpgradeModal(false);
+                  window.location.href = "/dashboard/billing";
+                }}
+                className="w-full py-3.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-bold text-center rounded-xl text-sm transition-all shadow hover:shadow-md cursor-pointer flex items-center justify-center gap-2"
+              >
+                <span>Actualizar Plan</span>
+              </button>
+              <button
+                onClick={() => {
+                  setShowUpgradeModal(false);
+                  window.location.href = "/#pricing";
+                }}
+                className="w-full py-3.5 bg-[var(--color-slate-100)] hover:bg-[var(--color-slate-200)] text-[var(--color-slate-700)] font-bold text-center rounded-xl text-sm transition-colors cursor-pointer"
+              >
+                <span>Ver Planes y Precios</span>
+              </button>
             </div>
           </div>
         </div>

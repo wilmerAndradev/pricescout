@@ -5,7 +5,6 @@ import os
 if not os.environ.get("NEXT_PUBLIC_SUPABASE_URL"):
     _candidates = [
         os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "web", ".env.local"),
-        r"c:\Users\SuperUsuario\Documents\PC - Trabajo\Proyectos\PriceScout_Chile\apps\web\.env.local",
     ]
     for _env_path in _candidates:
         _env_path = os.path.normpath(_env_path)

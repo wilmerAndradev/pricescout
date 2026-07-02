@@ -62,7 +62,7 @@ export default function DashboardSearchForm() {
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="¿Qué quieres buscar hoy? Ej: Zapatillas Nike, Cafetera..."
+          placeholder="Ingresa una fragancia o marca... Ej: Sauvage Dior, Bleu de Chanel, One Million..."
           className="w-full bg-transparent border-0 outline-none text-[var(--color-slate-900)] font-body text-sm placeholder-[var(--color-slate-400)] min-h-[36px]"
           disabled={isLoading}
         />

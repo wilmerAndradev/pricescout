@@ -105,7 +105,7 @@ test.describe("PriceScout Chile E2E Flows", () => {
     await page.goto('/');
     
     // Check search input exists (updated placeholder for SRS v4.0 design)
-    const searchInput = page.locator('input[placeholder*="¿Qué producto buscas?"]');
+    const searchInput = page.locator('input[placeholder*="Ingresa una fragancia"]');
     await expect(searchInput).toBeVisible();
     
     // Type query
