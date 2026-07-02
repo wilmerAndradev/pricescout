@@ -22,5 +22,4 @@ jobs:
         run: npm install --global vercel@latest
 
       - name: Deploy to production
-        working-directory: apps/web
         run: vercel deploy --prod --token=${{ secrets.VERCEL_TOKEN }}

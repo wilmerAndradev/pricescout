@@ -25,7 +25,6 @@ jobs:
 
       - name: Deploy preview and capture URL
         id: deploy
-        working-directory: apps/web
         run: |
           PREVIEW_URL=$(vercel deploy --token=${{ secrets.VERCEL_TOKEN }})
           echo "preview_url=$PREVIEW_URL" >> $GITHUB_OUTPUT
