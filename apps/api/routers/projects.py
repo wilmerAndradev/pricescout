@@ -6,10 +6,12 @@ Provides endpoints for creating projects and retrieving historical price series.
 """
 
 import logging
-from fastapi import APIRouter, HTTPException, Depends
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from typing import Optional, List
-from auth import get_current_user, execute_with_retry
+
+from auth import execute_with_retry, get_current_user
 
 logger = logging.getLogger(__name__)
 
@@ -197,11 +199,11 @@ def refresh_project(project_id: str, user_id: str = Depends(get_current_user)):
     Implements a strict 1x/hour manual update limit per project.
     """
     import datetime
-    from core.plans import supabase_admin, get_user_plan_and_limits
+
+    from core.plans import get_user_plan_and_limits, supabase_admin
     from scrapers.matcher import score_match
     from scrapers.normalizer import is_dupe_product
     from search.query_builder import build_search_query
-    from tasks.jobs import parse_product_details
 
     SLUG_TO_DOMAIN_AND_NAME = {
         "cosmetic": ("cosmetic.cl", "Cosmetic"),
@@ -290,7 +292,7 @@ def refresh_project(project_id: str, user_id: str = Depends(get_current_user)):
         # 4. Search products in DB
         query = project["search_query"]
         query_data = build_search_query(query)
-        
+
         products = []
         try:
             rpc_res = execute_with_retry(supabase_admin.rpc("search_products", {
@@ -303,7 +305,7 @@ def refresh_project(project_id: str, user_id: str = Depends(get_current_user)):
         except Exception as fts_err:
             logger.warning(f"Refresh FTS RPC failed: {fts_err}")
             # Fallback
-            from scrapers.normalizer import normalize_product_title, extract_volume_ml
+            from scrapers.normalizer import extract_volume_ml, normalize_product_title
             normalized_query = normalize_product_title(query)
             query_volume = extract_volume_ml(query)
             terms = [t for t in normalized_query.split() if len(t) > 1]
@@ -323,7 +325,7 @@ def refresh_project(project_id: str, user_id: str = Depends(get_current_user)):
             url = prod.get("url")
             if not slug or not url:
                 continue
-            
+
             key = (slug, url)
             existing = unique_products.get(key)
             if not existing:
@@ -338,7 +340,7 @@ def refresh_project(project_id: str, user_id: str = Depends(get_current_user)):
                     current_seen = prod.get("last_seen_at") or ""
                     if current_seen > existing_seen:
                         unique_products[key] = prod
-                        
+
         products = list(unique_products.values())
 
         # Select the CHEAPEST product per store domain
@@ -349,21 +351,21 @@ def refresh_project(project_id: str, user_id: str = Depends(get_current_user)):
             raw_title = prod.get("title") or ""
             score = score_match(query, raw_title)
             is_dupe = is_dupe_product(raw_title)
-            
+
             if is_dupe:
                 if score < 0.25:
                     continue
             else:
                 if score < 0.80:
                     continue
-                
+
             slug = prod.get("store_slug")
             domain_name = SLUG_TO_DOMAIN_AND_NAME.get(slug)
             if not domain_name:
                 continue
             domain, name = domain_name
             domain_lower = domain.strip().lower()
-            
+
             if allowed_domains is not None and domain_lower not in allowed_domains:
                 continue
 

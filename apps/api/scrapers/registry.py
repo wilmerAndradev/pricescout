@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from enum import Enum
 
+
 class SyncMethod(str, Enum):
     SHOPIFY_JSON = "shopify_json"
     SHOPIFY_JS = "shopify_js"

@@ -1,10 +1,12 @@
-from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
-from auth import get_current_user
-from tasks.jobs import supabase_writer
-from scrapers.registry import get_store_by_slug, get_active_stores
-from scrapers.tasks import sync_store, sync_all_stores
-from tasks.celery_app import check_celery_available
 import logging
+
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+
+from auth import get_current_user
+from scrapers.registry import get_active_stores, get_store_by_slug
+from scrapers.tasks import sync_all_stores, sync_store
+from tasks.celery_app import check_celery_available
+from tasks.jobs import supabase_writer
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +20,7 @@ def trigger_store_sync(store_slug: str, background_tasks: BackgroundTasks, user_
     store = get_store_by_slug(store_slug)
     if not store:
         raise HTTPException(status_code=404, detail=f"Tienda '{store_slug}' no encontrada en el registro")
-        
+
     if not store.active:
         raise HTTPException(status_code=400, detail=f"La tienda '{store_slug}' está inactiva")
 
@@ -29,7 +31,7 @@ def trigger_store_sync(store_slug: str, background_tasks: BackgroundTasks, user_
         else:
             background_tasks.add_task(sync_store.run, store_slug)
             task_id = f"local_{store_slug}"
-            
+
         return {
             "message": f"Sincronización iniciada para la tienda: {store.name}",
             "task_id": task_id
@@ -50,7 +52,7 @@ def trigger_all_stores_sync(background_tasks: BackgroundTasks, user_id: str = De
         else:
             background_tasks.add_task(sync_all_stores.run)
             task_id = "local_all_stores"
-            
+
         return {
             "message": "Sincronización iniciada para todas las tiendas activas",
             "task_id": task_id
@@ -68,11 +70,11 @@ def get_scraper_status(user_id: str = Depends(get_current_user)):
         # Consultar todas las tiendas en Supabase
         res = supabase_writer.table("stores").select("*").execute()
         stores_in_db = {s["slug"]: s for s in res.data} if res.data else {}
-        
+
         # Cruzar con las registradas localmente en registry.py
         active_stores = get_active_stores()
         status_list = []
-        
+
         for store in active_stores:
             db_data = stores_in_db.get(store.slug, {})
             status_list.append({
@@ -85,17 +87,24 @@ def get_scraper_status(user_id: str = Depends(get_current_user)):
                 "last_sync_products_count": db_data.get("last_sync_products_count", 0),
                 "synced": "last_sync_at" in db_data and db_data["last_sync_at"] is not None
             })
-            
+
         return status_list
     except Exception as e:
         logger.error(f"Error al obtener estado de los scrapers: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 # --- Schemas and Endpoint for Relevancy Search/Matching (TAREA 3) ---
-from pydantic import BaseModel
 from typing import List, Optional
-from scrapers.normalizer import normalize_product_title, is_dupe_product, extract_dupe_reference
+
+from pydantic import BaseModel
+
 from scrapers.matcher import score_match
+from scrapers.normalizer import (
+    extract_dupe_reference,
+    is_dupe_product,
+    normalize_product_title,
+)
+
 
 class ProductResult(BaseModel):
     store_slug: str
@@ -129,34 +138,34 @@ def search_products_match(query: str, user_id: str = Depends(get_current_user)):
     query_clean = query.strip()
     if not query_clean:
         raise HTTPException(status_code=400, detail="Query cannot be empty")
-        
+
     query_normalized = normalize_product_title(query_clean)
-    
+
     try:
         # 1. Obtener todas las tiendas registradas para tener un mapeo de slug -> name
         active_stores = get_active_stores()
         store_names = {s.slug: s.name for s in active_stores}
-        
+
         # 2. Consultar todos los productos en Supabase
         res = supabase_writer.table("products").select("*").execute()
         products = res.data or []
-        
+
         exact_results = []
         related_results = []
         dupe_results = []
         discarded_count = 0
-        
+
         for prod in products:
             title = prod.get("title", "")
             score, detail = score_match(query_clean, title, return_detail=True)
-            
+
             # Obtener is_dupe y dupe_of
             is_dupe = is_dupe_product(title)
             dupe_of = extract_dupe_reference(title)
-            
+
             store_slug = prod.get("store_slug", "unknown")
             store_name = store_names.get(store_slug, store_slug.capitalize())
-            
+
             result_item = ProductResult(
                 store_slug=store_slug,
                 store_name=store_name,
@@ -172,7 +181,7 @@ def search_products_match(query: str, user_id: str = Depends(get_current_user)):
                 score=score,
                 match_detail=detail
             )
-            
+
             if is_dupe:
                 if score >= 0.25:
                     dupe_results.append(result_item)
@@ -185,12 +194,12 @@ def search_products_match(query: str, user_id: str = Depends(get_current_user)):
                     related_results.append(result_item)
                 else:
                     discarded_count += 1
-                    
+
         # Ordenar por score desc
         exact_results.sort(key=lambda x: x.score, reverse=True)
         related_results.sort(key=lambda x: x.score, reverse=True)
         dupe_results.sort(key=lambda x: x.score, reverse=True)
-        
+
         return SearchResponse(
             query=query_clean,
             query_normalized=query_normalized,
@@ -199,7 +208,7 @@ def search_products_match(query: str, user_id: str = Depends(get_current_user)):
             dupe_results=dupe_results,
             discarded_count=discarded_count
         )
-        
+
     except Exception as e:
         logger.error(f"Error en /search de router scraper: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")

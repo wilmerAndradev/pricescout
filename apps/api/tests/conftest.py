@@ -17,11 +17,13 @@ if api_path not in sys.path:
 
 # Mock redis module
 import redis
+
 mock_redis = MagicMock()
 redis.from_url = MagicMock(return_value=mock_redis)
 
 # Mock supabase module create_client BEFORE importing auth, core.plans, tasks.jobs
 import supabase
+
 mock_supabase_client = MagicMock()
 supabase.create_client = MagicMock(return_value=mock_supabase_client)
 
@@ -54,6 +56,7 @@ mock_supabase_client.rpc = MagicMock(return_value=MockResponse())
 
 import pytest
 from fastapi.testclient import TestClient
+
 
 @pytest.fixture(autouse=True)
 def clean_mocks():

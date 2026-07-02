@@ -19,8 +19,8 @@ if not os.environ.get("NEXT_PUBLIC_SUPABASE_URL"):
                         os.environ.setdefault(_k.strip(), _v)
             break
 
-import time
 import logging
+import time
 
 _logger = logging.getLogger(__name__)
 
@@ -43,9 +43,9 @@ def execute_with_retry(query_builder, max_retries=3, delay=0.15):
             raise
     return query_builder.execute()
 
-from fastapi import HTTPException, Security, Depends
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from supabase import create_client, Client
+from fastapi import HTTPException, Security
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from supabase import Client, create_client
 
 security = HTTPBearer()
 
@@ -64,7 +64,7 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Security(securi
     decodes it and verifies it using Supabase's getUser endpoint.
     """
     token = credentials.credentials
-    
+
     try:
         # Verify token by asking Supabase auth
         response = supabase.auth.get_user(token)

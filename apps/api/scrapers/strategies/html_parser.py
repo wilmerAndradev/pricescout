@@ -1,12 +1,13 @@
-import os
+import asyncio
 import json
 import logging
-import asyncio
+import os
 from datetime import datetime, timezone
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urljoin
+
 import httpx
 
-from scrapers.base import ScraperBase, ScrapedProduct
+from scrapers.base import ScrapedProduct, ScraperBase
 from scrapers.normalizer import normalize_product_title
 
 logger = logging.getLogger(__name__)
@@ -37,10 +38,10 @@ El JSON debe tener esta estructura exacta:
 Reglas:
 - Si el precio tiene puntos de miles (29.990), conviértelo a número entero (29990).
 - Si no puedes extraer un campo, usa null.
-- "is_dupe": true si el nombre indica que es una inspiración, dupe, o versión árabe 
-  de otro perfume. Palabras que lo indican: inspirado en, dupe, tipo, estilo, attar, 
+- "is_dupe": true si el nombre indica que es una inspiración, dupe, o versión árabe
+  de otro perfume. Palabras que lo indican: inspirado en, dupe, tipo, estilo, attar,
   aceite árabe, inspired by, impression of, our version of, compare to, al estilo de.
-- "dupe_of": si is_dupe es true, extraer el nombre del perfume original al que hace 
+- "dupe_of": si is_dupe es true, extraer el nombre del perfume original al que hace
   referencia. Ejemplo: "Inspirado en Chanel N5" → dupe_of: "Chanel N5".
 
 HTML:
@@ -58,7 +59,7 @@ class HtmlParserScraper(ScraperBase):
     async def fetch_products(self) -> list[ScrapedProduct]:
         scraped_products = []
         resolved_url_str = await self._resolve_catalog_url()
-        
+
         if not resolved_url_str:
             self.logger.error("No se pudo resolver una URL de catálogo válida para iniciar.")
             return scraped_products
@@ -86,10 +87,10 @@ class HtmlParserScraper(ScraperBase):
             current_url = start_url
             page_count = 1
             max_pages = 10  # Límite por sección para evitar loops y consumo excesivo de tokens
-            
+
             while current_url and page_count <= max_pages:
                 self.logger.info(f"Scraping catalog page {page_count} at: {current_url}")
-                
+
                 # 1. Descargar HTML con StealthyFetcher (anti-Cloudflare)
                 html = None
                 try:
@@ -129,37 +130,37 @@ class HtmlParserScraper(ScraperBase):
 
                 # 3. Extraer productos utilizando el LLM (Gemini con fallback a Groq)
                 extraction = await self._extract_with_llm(cleaned_html)
-                
+
                 if not extraction or "products" not in extraction:
                     self.logger.error(f"Failed to extract product list on page {page_count}.")
                     break
-                    
+
                 products = extraction["products"]
                 self.logger.info(f"Extracted {len(products)} products from page {page_count}.")
-                
+
                 for prod in products:
                     title = prod.get("title", "")
                     if not title:
                         continue
-                        
+
                     prod_url = prod.get("url", "")
                     if prod_url:
                         # Resolver URL relativa a absoluta
                         prod_url = urljoin(current_url, prod_url)
                     else:
                         prod_url = current_url
-                        
+
                     image_url = prod.get("image_url")
                     if image_url:
                         image_url = urljoin(current_url, image_url)
-                        
+
                     try:
                         price = float(prod.get("price") or 0)
                     except (ValueError, TypeError):
                         price = 0.0
-                        
+
                     available = bool(prod.get("available", True))
-                    
+
                     scraped_products.append(
                         ScrapedProduct(
                             store_slug=self.store_slug,
@@ -193,7 +194,7 @@ class HtmlParserScraper(ScraperBase):
                 else:
                     self.logger.info("No next page URL returned. Category completed.")
                     break
-                    
+
         return scraped_products
 
     def _clean_html(self, html: str, url: str) -> str:
@@ -218,7 +219,7 @@ class HtmlParserScraper(ScraperBase):
                     if src:
                         attrs["src"] = src
                 tag.attrs = attrs
-            
+
             cleaned_soup = str(soup)
             if len(cleaned_soup) > 200:
                 # 150k caracteres caben holgadamente en Gemini 2.5 y evitan truncar paginación
@@ -240,7 +241,7 @@ class HtmlParserScraper(ScraperBase):
                 return cleaned[:100000]
         except Exception as e:
             self.logger.warning(f"Trafilatura fallback failed: {e}")
-            
+
         return html[:100000]
 
     async def _resolve_catalog_url(self) -> str | None:
@@ -255,16 +256,16 @@ class HtmlParserScraper(ScraperBase):
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         }
-        
+
         urls_to_try = []
         if self.catalog_url:
             urls_to_try.append(self.catalog_url)
-            
+
         # Rutas comunes para agregar
         paths = ["/catalogo", "/productos", "/tienda", "/shop", "/collections/all"]
         for p in paths:
             urls_to_try.append(f"{self.store_url}{p}")
-            
+
         async with httpx.AsyncClient(headers=headers, timeout=15.0, follow_redirects=True) as client:
             for url in urls_to_try:
                 try:
@@ -275,21 +276,21 @@ class HtmlParserScraper(ScraperBase):
                         return url
                 except Exception as e:
                     self.logger.debug(f"Catalog probe failed for {url}: {e}")
-                    
+
         # Si todo falla, retornar la primera por defecto
         return self.catalog_url or f"{self.store_url}/collections/all"
 
     async def _extract_with_llm(self, cleaned_html: str) -> dict | None:
         """Llama a Gemini 2.5 Flash-Lite, y a Groq en caso de error."""
         prompt = EXTRACTION_PROMPT.format(html=cleaned_html)
-        
+
         # 1. Intentar con Gemini
         gemini_api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
         if gemini_api_key:
             try:
                 import google.generativeai as genai
                 genai.configure(api_key=gemini_api_key)
-                
+
                 # Intentar usar el modelo pedido, o el estable en su defecto
                 model_names = [
                     "gemini-2.5-flash-lite-preview-06-17",
@@ -309,7 +310,7 @@ class HtmlParserScraper(ScraperBase):
                                 "max_output_tokens": 8000,
                             }
                         )
-                        
+
                         max_retries = 3
                         for attempt in range(max_retries):
                             try:
@@ -330,13 +331,13 @@ class HtmlParserScraper(ScraperBase):
                                     await asyncio.sleep(wait_time)
                                     continue
                                 raise api_err
-                        
+
                         if data:
                             break
                     except Exception as model_err:
                         self.logger.warning(f"Gemini model {name} failed: {model_err}")
                         continue
-                
+
                 if data:
                     return data
                 else:
@@ -350,7 +351,7 @@ class HtmlParserScraper(ScraperBase):
             try:
                 from groq import Groq
                 client = Groq(api_key=groq_api_key)
-                
+
                 self.logger.info("Calling Groq (llama-3.3-70b-versatile) fallback...")
                 loop = asyncio.get_running_loop()
                 response = await loop.run_in_executor(
@@ -369,12 +370,12 @@ class HtmlParserScraper(ScraperBase):
                         max_tokens=2048,
                     )
                 )
-                
+
                 data = json.loads(response.choices[0].message.content)
                 return data
             except Exception as e:
                 self.logger.error(f"Groq fallback extraction failed: {e}")
-                
+
         return None
 
     async def _detect_jumpseller(self, url: str) -> bool:
@@ -396,22 +397,22 @@ class HtmlParserScraper(ScraperBase):
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         }
-        
+
         async with httpx.AsyncClient(headers=headers, timeout=20.0, follow_redirects=True) as client:
             for start_url in urls_to_process:
                 self.logger.info(f"--- Iniciando extracción determinista Jumpseller para: {start_url} ---")
                 page_count = 1
                 max_pages = 800  # Permitir recorrer catálogos completos
-                
+
                 while page_count <= max_pages:
                     # Construir URL con página
                     if "?" in start_url:
                         current_url = f"{start_url}&page={page_count}"
                     else:
                         current_url = f"{start_url}?page={page_count}"
-                        
+
                     self.logger.info(f"Scraping Jumpseller page {page_count} at: {current_url}")
-                    
+
                     html = None
                     try:
                         r = await client.get(current_url)
@@ -420,22 +421,22 @@ class HtmlParserScraper(ScraperBase):
                     except Exception as e:
                         self.logger.error(f"Error fetching Jumpseller page {current_url}: {e}")
                         break
-                        
+
                     if not html or len(html) < 200:
                         self.logger.error(f"Obtained empty or invalid HTML from {current_url}")
                         break
-                        
+
                     from bs4 import BeautifulSoup
                     soup = BeautifulSoup(html, "html.parser")
-                    
+
                     # Extraer productos
                     extracted = self._parse_jumpseller_page(soup, current_url)
                     if not extracted:
                         self.logger.info(f"No more products found on page {page_count}. Finished category.")
                         break
-                        
+
                     self.logger.info(f"Extracted {len(extracted)} products from Jumpseller page {page_count}.")
-                    
+
                     for prod in extracted:
                         scraped_products.append(
                             ScrapedProduct(
@@ -455,55 +456,55 @@ class HtmlParserScraper(ScraperBase):
                                 sync_method="html_parser"
                             )
                         )
-                        
+
                     page_count += 1
                     await self._request_delay()
-                    
+
         return scraped_products
 
     def _parse_jumpseller_page(self, soup, base_url: str) -> list[dict]:
         import re
         from urllib.parse import urljoin
-        
+
         products = []
         seen_urls = set()
-        
+
         # Encontrar todas las tarjetas de producto
         card_candidates = soup.find_all(lambda tag: tag.name in ["div", "li", "article"] and tag.get("class") and any(
             c for c in tag.get("class") if c in ["product-block", "product-card"] or ("product" in c and "qty" not in c and "list" not in c and "grid" not in c)
         ))
-        
+
         if not card_candidates:
             card_candidates = soup.find_all(lambda tag: tag.name in ["div", "li", "article"] and tag.get("class") and any(
                 "product" in c or "card" in c or "item" in c for c in tag.get("class")
             ))
-            
+
         for block in card_candidates:
             import copy
             block_copy = copy.copy(block)
-            
+
             # Decomponer cuotas, valoraciones y badges de reviews
             for tag in block_copy.find_all(class_=lambda c: c and any(x in c.lower() for x in ["cuotas", "installment", "payment", "ratings", "rating", "star", "reviews", "review"])):
                 tag.decompose()
-                
+
             # Encontrar el primer enlace que sea realmente un producto y no un filtro/marca/etc.
             a_tag = None
             for a in block_copy.find_all("a", href=True):
                 href_val = a["href"].strip()
-                if (href_val in ["/", "#", "/all"] or 
+                if (href_val in ["/", "#", "/all"] or
                     any(x in href_val for x in ["page=", "sorting=", "/customer/", "/marcas/", "/marca/", "/brand/", "/categoria/", "/category/", "/price/", "checkout", "cart", "?max=", "?min="])):
                     continue
                 a_tag = a
                 break
-                
+
             if not a_tag:
                 continue
-                
+
             href = a_tag["href"]
             full_url = urljoin(base_url, href)
             if full_url in seen_urls:
                 continue
-                
+
             # Extraer precios
             prices = []
             for el in block_copy.find_all(True):
@@ -520,12 +521,12 @@ class HtmlParserScraper(ScraperBase):
                                     prices.append(val)
                             except ValueError:
                                 pass
-                                
+
             if not prices:
                 continue
-                
+
             price = min(prices)
-            
+
             # Extraer título
             title = None
             title_el = (
@@ -540,11 +541,11 @@ class HtmlParserScraper(ScraperBase):
                     title = img["alt"].strip()
             if not title:
                 title = a_tag.get_text(strip=True)
-                
+
             title = " ".join(title.split())
             if not title or len(title) < 5 or any(x in title.lower() for x in ["ingresar", "crear cuenta", "lista de favoritos", "favoritos", "mi cuenta"]):
                 continue
-                
+
             # Imagen
             image_url = None
             img_tag = block_copy.find("img")
@@ -560,13 +561,13 @@ class HtmlParserScraper(ScraperBase):
                         else:
                             image_url = urljoin(base_url, val)
                             break
-                            
+
             # Stock
             available = True
             block_text = block_copy.get_text().lower()
             if any(x in block_text for x in ["agotado", "sin stock", "out of stock", "no disponible"]):
                 available = False
-                
+
             products.append({
                 "title": title,
                 "url": full_url,
@@ -575,5 +576,5 @@ class HtmlParserScraper(ScraperBase):
                 "available": available
             })
             seen_urls.add(full_url)
-            
+
         return products

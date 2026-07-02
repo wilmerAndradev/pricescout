@@ -11,11 +11,12 @@ Pipeline:
   6. Log call to Supabase llm_calls table
 """
 
-import os
 import json
 import logging
+import os
 import time
 from typing import Optional
+
 from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
@@ -280,7 +281,7 @@ def infer_product_category(query: str, supabase_client=None) -> str:
 
     Responde únicamente con el nombre exacto de la categoría seleccionada de la lista en minúsculas. No agregues explicaciones, puntuación ni texto adicional.
     """
-    
+
     import google.generativeai as genai
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
@@ -293,10 +294,10 @@ def infer_product_category(query: str, supabase_client=None) -> str:
         model = genai.GenerativeModel("gemini-2.0-flash-lite")
         response = model.generate_content(prompt)
         category = response.text.strip().lower()
-        
+
         latency = int((time.time() - t0) * 1000)
         logger.info(f"[Classifier] Gemini classified as '{category}' in {latency}ms")
-        
+
         # Validate category is in allowed list
         allowed = {"tecnología", "computación", "hardware", "moda", "calzado", "hogar", "perfumería", "juguetes", "construcción", "herramientas", "supermercado", "otros"}
         if category in allowed:

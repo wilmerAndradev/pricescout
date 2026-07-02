@@ -5,13 +5,15 @@ Provides logic for validating and enforcing SaaS plan limits on the backend.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 """
 
-import os
 import logging
-import redis
+import os
 from datetime import datetime, timezone
 from typing import Optional
+
+import redis
 from fastapi import HTTPException
-from supabase import create_client, Client
+from supabase import Client, create_client
+
 from auth import execute_with_retry
 
 logger = logging.getLogger(__name__)

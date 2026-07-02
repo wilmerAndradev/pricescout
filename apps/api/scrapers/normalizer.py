@@ -1,5 +1,6 @@
 import re
 import unicodedata
+
 from rapidfuzz.distance import Levenshtein
 
 # Stopwords a remover (según especificación §5)

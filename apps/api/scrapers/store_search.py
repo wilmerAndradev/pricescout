@@ -97,10 +97,10 @@ STORE_SEARCH_PROFILES = {
         "url_contains": [".html"],
         # Excluir banners Cencosud, portales corporativos, categorías y estáticos
         "url_excludes": [
-            "tarjetacencosud", "cencosud", "/avance/", "javascript:", "#", 
-            "sostenibilidad", "gift-card", "informaciones-legales", "mi-cuenta", 
-            "mis-compras", "seguimiento", "ayuda", "/jumbo-prime", "/easy", 
-            "/jumbo", "/santaisabel", "/spidchile", "vestua-paris.html", 
+            "tarjetacencosud", "cencosud", "/avance/", "javascript:", "#",
+            "sostenibilidad", "gift-card", "informaciones-legales", "mi-cuenta",
+            "mis-compras", "seguimiento", "ayuda", "/jumbo-prime", "/easy",
+            "/jumbo", "/santaisabel", "/spidchile", "vestua-paris.html",
             "snkr-wash.html", "noviosparis"
         ],
         "base_domain": "www.paris.cl",

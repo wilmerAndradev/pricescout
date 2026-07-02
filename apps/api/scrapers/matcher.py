@@ -1,9 +1,10 @@
 import re
+
 from scrapers.normalizer import (
-    normalize_product_title,
-    is_dupe_product,
+    extract_volume_ml,
     fuzzy_match_tokens,
-    extract_volume_ml
+    is_dupe_product,
+    normalize_product_title,
 )
 
 # Umbrales de corte
@@ -14,31 +15,31 @@ SCORE_DISCARD = 0.25   # por debajo de esto, descartar
 
 # Palabras de marcas comunes para excluir del núcleo de tokens core
 BRAND_WORDS = {
-    "dior", "chanel", "armani", "giorgio", "paco", "rabanne", "carolina", "herrera", 
-    "versace", "hugo", "boss", "calvin", "klein", "ck", "yves", "saint", "laurent", "ysl", 
-    "guerlain", "givenchy", "tom", "ford", "creed", "bvlgari", "bulgari", "dolce", "gabbana", 
-    "jean", "paul", "gaultier", "jpg", "montblanc", "ralph", "lauren", "polo", "hermes", 
-    "prada", "mugler", "thierry", "valentino", "nautica", "issey", "miyake", "kenzo", "lacoste", 
-    "antonio", "banderas", "diesel", "elizabeth", "arden", "estee", "lauder", "clinique", 
+    "dior", "chanel", "armani", "giorgio", "paco", "rabanne", "carolina", "herrera",
+    "versace", "hugo", "boss", "calvin", "klein", "ck", "yves", "saint", "laurent", "ysl",
+    "guerlain", "givenchy", "tom", "ford", "creed", "bvlgari", "bulgari", "dolce", "gabbana",
+    "jean", "paul", "gaultier", "jpg", "montblanc", "ralph", "lauren", "polo", "hermes",
+    "prada", "mugler", "thierry", "valentino", "nautica", "issey", "miyake", "kenzo", "lacoste",
+    "antonio", "banderas", "diesel", "elizabeth", "arden", "estee", "lauder", "clinique",
     "shiseido", "victoria", "secret", "oster", "asus", "nike",
-    "lattafa", "armaf", "afnan", "rasasi", "al", "haramain", "maison", "alhambra", 
-    "mancera", "montale", "xerjoff", "roja", "parfums", "marly", "byredo", "diptyque", 
-    "amouage", "le", "labo", "kilian", "penhaligon", "juliette", "gun", "initio", 
-    "cartier", "chloe", "lancome", "gucci", "burberry", "coach", "salvatore", "ferragamo", 
-    "moschino", "lolita", "lempicka", "juicy", "couture", "elizabeth", "taylor", "britney", 
-    "spears", "paris", "hilton", "shakira", "perry", "ellis", "davidoff", "jo", "malone", 
+    "lattafa", "armaf", "afnan", "rasasi", "al", "haramain", "maison", "alhambra",
+    "mancera", "montale", "xerjoff", "roja", "parfums", "marly", "byredo", "diptyque",
+    "amouage", "le", "labo", "kilian", "penhaligon", "juliette", "gun", "initio",
+    "cartier", "chloe", "lancome", "gucci", "burberry", "coach", "salvatore", "ferragamo",
+    "moschino", "lolita", "lempicka", "juicy", "couture", "elizabeth", "taylor", "britney",
+    "spears", "paris", "hilton", "shakira", "perry", "ellis", "davidoff", "jo", "malone",
     "tiffany", "boucheron", "lalique", "caron"
 }
 
 # Palabras genéricas comunes de retail y perfumería para excluir de tokens core
 GENERIC_WORDS = {
     # Tipos y concentraciones
-    "edp", "edt", "edc", "parfum", "cologne", "extrait", 
+    "edp", "edt", "edc", "parfum", "cologne", "extrait",
     # Palabras comunes de retail y embalaje
-    "perfume", "fragrance", "spray", "unisex", "homme", "femme", "men", "women", 
-    "man", "woman", "tester", "decant", "muestra", "sample", "travel", "size", 
-    "miniatura", "nuevo", "new", "original", "sellado", "caja", "box", "ml", 
-    "set", "estuche", "pack", "cofre", "kit", "deo", "desodorante", "vaporisateur", 
+    "perfume", "fragrance", "spray", "unisex", "homme", "femme", "men", "women",
+    "man", "woman", "tester", "decant", "muestra", "sample", "travel", "size",
+    "miniatura", "nuevo", "new", "original", "sellado", "caja", "box", "ml",
+    "set", "estuche", "pack", "cofre", "kit", "deo", "desodorante", "vaporisateur",
     "natural", "luxe", "body", "splash", "mist", "roll", "on", "oil", "attar",
     "colonia", "aromas"
 }
@@ -94,7 +95,7 @@ def score_match(query: str, product_title: str, return_detail: bool = False):
         for qct in core_tokens:
             best_core_match = max((fuzzy_match_tokens(qct, pt) for pt in product_tokens), default=0.0)
             core_scores.append(best_core_match)
-        
+
         # Si algún token core del query está completamente ausente (match == 0.0)
         # o el promedio de matches de los tokens core es muy bajo (< 0.50)
         if any(cs == 0.0 for cs in core_scores) or (sum(core_scores) / len(core_tokens) < 0.50):

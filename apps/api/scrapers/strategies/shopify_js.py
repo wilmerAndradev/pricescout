@@ -1,12 +1,13 @@
-import httpx
-import asyncio
+import json
 import logging
 import re
-import json
 from datetime import datetime, timezone
-from scrapers.base import ScraperBase, ScrapedProduct
+
+import httpx
+from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential
+
+from scrapers.base import ScrapedProduct, ScraperBase
 from scrapers.normalizer import normalize_product_title
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception
 
 logger = logging.getLogger(__name__)
 
@@ -37,20 +38,20 @@ class ShopifyJsScraper(ScraperBase):
         scraped_products = []
         page = 1
         limit = 250
-        
+
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             "Accept": "application/json",
         }
-        
+
         # Intentamos primero a través de /collections/all/products.json
         use_js_fallback = False
-        
+
         async with httpx.AsyncClient(headers=headers, timeout=30.0, follow_redirects=True) as client:
             while True:
                 url = f"{self.store_url}/collections/all/products.json?limit={limit}&page={page}"
                 self.logger.info(f"[ShopifyJS] Fetching collection page {page} from {self.store_name}...")
-                
+
                 try:
                     response = await _get_with_retry(client, url)
                     response_data = response.json()
@@ -67,52 +68,52 @@ class ShopifyJsScraper(ScraperBase):
                     self.logger.error(f"Failed to fetch collection page {page} after retries: {exc}. Triggering JS fallback.")
                     use_js_fallback = True
                     break
-                
+
                 if not response_data or "products" not in response_data:
                     self.logger.warning("Invalid collection JSON response structure. Triggering JS fallback.")
                     use_js_fallback = True
                     break
-                    
+
                 products = response_data["products"]
                 if not products:
                     self.logger.info(f"No more products in collection. Finished at page {page - 1}.")
                     break
-                    
+
                 self.logger.info(f"Found {len(products)} products on collection page {page}.")
-                
+
                 for prod in products:
                     prod_title = prod.get("title", "")
                     handle = prod.get("handle", "")
                     if not prod_title or not handle:
                         continue
-                        
+
                     variants = prod.get("variants", [])
                     images = prod.get("images", [])
                     default_image = images[0].get("src") if images else None
-                    
+
                     for variant in variants:
                         variant_title = variant.get("title", "")
                         if variant_title and variant_title.lower() not in ("default title", "default", "1", "standard"):
                             title = f"{prod_title} {variant_title}"
                         else:
                             title = prod_title
-                            
+
                         variant_id = variant.get("id")
                         product_url = f"{self.store_url}/products/{handle}"
                         if variant_id:
                             product_url += f"?variant={variant_id}"
-                            
+
                         image_url = default_image
                         if variant.get("featured_image"):
                             image_url = variant["featured_image"].get("src") or default_image
-                            
+
                         try:
                             price = float(variant.get("price") or 0)
                         except (ValueError, TypeError):
                             price = 0.0
-                            
+
                         available = bool(variant.get("available", True))
-                        
+
                         scraped_products.append(
                             ScrapedProduct(
                                 store_slug=self.store_slug,
@@ -133,7 +134,7 @@ class ShopifyJsScraper(ScraperBase):
                         )
                 page += 1
                 await self._request_delay()
-                
+
         # Fallback de extracción de JS en el HTML
         if use_js_fallback or not scraped_products:
             self.logger.info("[ShopifyJS] Executing JS script extraction fallback...")
@@ -142,7 +143,7 @@ class ShopifyJsScraper(ScraperBase):
             except ImportError:
                 self.logger.error("Scrapling not installed, cannot run JS extraction fallback.")
                 return scraped_products
-                
+
             try:
                 # Descargar la página principal o la página de catálogo de colecciones
                 fallback_url = f"{self.store_url}/collections/all"
@@ -153,18 +154,18 @@ class ShopifyJsScraper(ScraperBase):
                     timeout=45000,
                     wait=3000,
                 )
-                
+
                 if not page_res:
                     self.logger.error("StealthyFetcher returned None for fallback page.")
                     return scraped_products
-                    
+
                 html = page_res.html if hasattr(page_res, 'html') else str(page_res)
-                
+
                 # Intentamos extraer del objeto JavaScript de Shopify
                 # 1. Buscar JSON-LD (application/ld+json o application/json)
                 from bs4 import BeautifulSoup
                 soup = BeautifulSoup(html, "html.parser")
-                
+
                 # Buscamos JSON-LD de productos
                 json_ld_scripts = soup.find_all("script", type="application/ld+json")
                 for script in json_ld_scripts:
@@ -179,30 +180,30 @@ class ShopifyJsScraper(ScraperBase):
                                 items = data["itemListElement"]
                             elif data.get("@type") == "Product":
                                 items = [data]
-                                
+
                         for item in items:
                             prod_data = item
                             # Si es ItemListElement, el producto real puede estar en 'item'
                             if "item" in item:
                                 prod_data = item["item"]
-                                
+
                             if not isinstance(prod_data, dict) or prod_data.get("@type") != "Product":
                                 continue
-                                
+
                             prod_title = prod_data.get("name", "")
                             prod_url = prod_data.get("url", "")
                             if not prod_title:
                                 continue
-                                
+
                             if prod_url and not prod_url.startswith("http"):
                                 prod_url = self.store_url + prod_url
-                                
+
                             image_url = prod_data.get("image")
                             if isinstance(image_url, list) and image_url:
                                 image_url = image_url[0]
                             elif isinstance(image_url, dict):
                                 image_url = image_url.get("url")
-                                
+
                             # Offers (Precios y disponibilidad)
                             offers = prod_data.get("offers", {})
                             price = 0.0
@@ -213,7 +214,7 @@ class ShopifyJsScraper(ScraperBase):
                             elif isinstance(offers, list) and offers:
                                 price = float(offers[0].get("price") or 0)
                                 available = "InStock" in offers[0].get("availability", "InStock")
-                                
+
                             scraped_products.append(
                                 ScrapedProduct(
                                     store_slug=self.store_slug,
@@ -234,7 +235,7 @@ class ShopifyJsScraper(ScraperBase):
                             )
                     except Exception as e:
                         self.logger.warning(f"Error parsing JSON-LD script: {e}")
-                        
+
                 # 2. Si no hay JSON-LD, intentar regex sobre window.ShopifyAnalytics o variables de JS
                 if not scraped_products:
                     # Buscamos variables como window.ShopifyAnalytics.meta o Shopify.products
@@ -249,7 +250,6 @@ class ShopifyJsScraper(ScraperBase):
                                 if not title:
                                     continue
                                 price = float(pm.get("price") or 0)
-                                id_prod = pm.get("id")
                                 scraped_products.append(
                                     ScrapedProduct(
                                         store_slug=self.store_slug,
@@ -270,8 +270,8 @@ class ShopifyJsScraper(ScraperBase):
                                 )
                         except Exception as e:
                             self.logger.warning(f"Failed parsing window.ShopifyAnalytics: {e}")
-                            
+
             except Exception as e:
                 self.logger.error(f"Failed fallback extraction: {e}")
-                
+
         return scraped_products

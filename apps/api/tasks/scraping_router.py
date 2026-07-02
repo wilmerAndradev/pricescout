@@ -12,8 +12,8 @@ SRS §MA-05: Cada resultado incluye extraction_method, confidence_score, source.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 """
 
-import os
 import logging
+import os
 from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
@@ -49,14 +49,14 @@ def _get_scraper_for_domain(domain: str, url: str):
     - Lider: objeto con método .scrape(url) estático (StealthyFetcher)
     - None si el dominio no tiene implementación todavía.
     """
-    from scrapers.mercadolibre import MercadoLibreScraper
-    from scrapers.falabella import FalabellaScraper
-    from scrapers.ripley import RipleyScraper
-    from scrapers.paris import ParisScraper
-    from scrapers.lider import LiderScraper
-    from scrapers.pcfactory import PCFactoryScraper
     from scrapers.abcdin import AbcDinScraper
+    from scrapers.falabella import FalabellaScraper
     from scrapers.hites import HitesScraper
+    from scrapers.lider import LiderScraper
+    from scrapers.mercadolibre import MercadoLibreScraper
+    from scrapers.paris import ParisScraper
+    from scrapers.pcfactory import PCFactoryScraper
+    from scrapers.ripley import RipleyScraper
 
     PARSER_REGISTRY = {
         "mercadolibre.cl": MercadoLibreScraper,

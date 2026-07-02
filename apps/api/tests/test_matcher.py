@@ -1,5 +1,10 @@
-from scrapers.normalizer import normalize_product_title, fuzzy_match_tokens, is_dupe_product
-from scrapers.matcher import score_match, SCORE_EXACT, SCORE_RELATED, SCORE_DISCARD
+from scrapers.matcher import SCORE_DISCARD, SCORE_EXACT, SCORE_RELATED, score_match
+from scrapers.normalizer import (
+    fuzzy_match_tokens,
+    is_dupe_product,
+    normalize_product_title,
+)
+
 
 def test_exact_match_scores_high():
     assert score_match("Ralph Lauren Big Pony No 2", "Ralph Lauren Big Pony No. 2 EDT 100ml") >= SCORE_EXACT
@@ -65,7 +70,7 @@ def test_number_format_unification():
     assert normalize_product_title("Ralph Lauren Big Pony No. 2") == normalize_product_title("Ralph Lauren Big Pony 2")
     assert normalize_product_title("Ralph Lauren Big Pony #2") == normalize_product_title("Ralph Lauren Big Pony 2")
     assert normalize_product_title("Ralph Lauren Big Pony N2") == normalize_product_title("Ralph Lauren Big Pony 2")
-    
+
 def test_number_mismatch_scores_low():
     # Big Pony 2 vs Big Pony 1 must not match
     assert score_match("Ralph Lauren Big Pony No. 2", "Ralph Lauren Big Pony #1") <= SCORE_DISCARD

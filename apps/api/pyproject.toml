@@ -11,4 +11,6 @@ exclude = [
 select = ["E", "F", "W", "I"]
 ignore = [
     "E501",  # line too long (manejado en revisión de código)
+    "E402",  # imports no al top: intencional en conftest.py (mocks antes de imports) y otros módulos
+    "E712",  # == True/False: aceptable en asserts de pytest para legibilidad
 ]

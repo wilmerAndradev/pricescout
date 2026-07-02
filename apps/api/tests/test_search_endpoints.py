@@ -1,6 +1,8 @@
 from unittest.mock import MagicMock, patch
+
 import pytest
 from fastapi import HTTPException
+
 from main import app
 from routers.search import get_optional_current_user
 
@@ -39,20 +41,20 @@ async def test_buscar_producto_exitoso(client, supabase_mock):
         "user_id": TEST_USER_ID,
         "environment_id": None
     }
-    
+
     def side_effect_table(table_name):
         if table_name == "searches":
             return MockQueryBuilder(data=[search_record])
         return MockQueryBuilder()
-        
+
     supabase_mock.table = MagicMock(side_effect=side_effect_table)
-    
+
     # Bypass auth and limits using FastAPI dependency overrides and mock
     app.dependency_overrides[get_optional_current_user] = lambda: TEST_USER_ID
     try:
         with patch("core.plans.check_monthly_search_limit") as mock_check_limit, \
              patch("tasks.celery_app.check_celery_available", return_value=False):
-             
+
             response = client.post(
                 "/api/v1/search",
                 json={"query": "zapatillas Nike Air Max 90"},
@@ -60,7 +62,7 @@ async def test_buscar_producto_exitoso(client, supabase_mock):
             )
     finally:
         app.dependency_overrides.clear()
-        
+
     assert response.status_code == 202
     assert response.json()["search_id"] == "search-uuid-123"
     assert "Search initiated successfully" in response.json()["message"]
@@ -86,7 +88,7 @@ async def test_buscar_producto_limite_excedido(client, supabase_mock):
                 "code": "LIMIT_EXCEEDED"
             }
         )
-        
+
     app.dependency_overrides[get_optional_current_user] = lambda: TEST_USER_ID
     try:
         with patch("core.plans.check_monthly_search_limit", side_effect=raise_limit_exceeded):
@@ -97,7 +99,7 @@ async def test_buscar_producto_limite_excedido(client, supabase_mock):
             )
     finally:
         app.dependency_overrides.clear()
-        
+
     assert response.status_code == 402
     assert "Límite de búsquedas mensuales alcanzado" in str(response.json())
 
@@ -114,7 +116,7 @@ async def test_buscar_producto_tiendas_excedidas(client, supabase_mock):
         "can_add_custom_stores": False,
         "projects_limit": 50
     }
-    
+
     # Mock environment returns 25 stores (exceeding Pro limit of 20)
     mock_env_record = {
         "id": "env-uuid-999",
@@ -123,19 +125,19 @@ async def test_buscar_producto_tiendas_excedidas(client, supabase_mock):
         "store_domains": ["store1.cl"] * 21,  # 21 stores
         "custom_domains": ["custom1.cl", "custom2.cl", "custom3.cl", "custom4.cl"]  # 4 stores (total 25)
     }
-    
+
     def side_effect_table(table_name):
         if table_name == "environments":
             return MockQueryBuilder(data=[mock_env_record])
         return MockQueryBuilder()
-        
+
     supabase_mock.table = MagicMock(side_effect=side_effect_table)
-    
+
     app.dependency_overrides[get_optional_current_user] = lambda: TEST_USER_ID
     try:
         with patch("core.plans.get_user_plan_and_limits", return_value=pro_plan_limits), \
              patch("core.plans.check_monthly_search_limit"):
-             
+
             response = client.post(
                 "/api/v1/search",
                 json={
@@ -146,6 +148,6 @@ async def test_buscar_producto_tiendas_excedidas(client, supabase_mock):
             )
     finally:
         app.dependency_overrides.clear()
-        
+
     assert response.status_code == 403
     assert "LIMIT_EXCEEDED" in str(response.json())

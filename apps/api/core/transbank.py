@@ -1,7 +1,8 @@
-import os
 import logging
+import os
+from typing import Any, Dict
+
 import httpx
-from typing import Dict, Any, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -17,7 +18,7 @@ class TransbankWebpayClient:
     """
     def __init__(self):
         self.environment = os.environ.get("TRANSBANK_ENVIRONMENT", "integration").lower()
-        
+
         if self.environment == "production":
             self.commerce_code = os.environ.get("TRANSBANK_COMMERCE_CODE")
             self.api_key = os.environ.get("TRANSBANK_API_KEY")
@@ -29,7 +30,7 @@ class TransbankWebpayClient:
             self.commerce_code = os.environ.get("TRANSBANK_COMMERCE_CODE") or SANDBOX_COMMERCE_CODE
             self.api_key = os.environ.get("TRANSBANK_API_KEY") or SANDBOX_API_KEY
             self.base_url = SANDBOX_BASE_URL
-            
+
         self.headers = {
             "Tbk-Api-Key-Id": self.commerce_code,
             "Tbk-Api-Key-Secret": self.api_key,
@@ -48,9 +49,9 @@ class TransbankWebpayClient:
             "amount": amount,
             "return_url": return_url
         }
-        
+
         logger.info(f"Initiating Transbank transaction. Buy Order: {buy_order}, Amount: {amount}")
-        
+
         async with httpx.AsyncClient(timeout=15.0) as client:
             try:
                 response = await client.post(url, json=payload, headers=self.headers)
@@ -71,9 +72,9 @@ class TransbankWebpayClient:
         This must be called within 3 hours of transaction initiation.
         """
         url = f"{self.base_url}/rswebpaytransaction/api/webpay/v1.2/transactions/{token}"
-        
+
         logger.info(f"Committing Transbank transaction. Token: {token}")
-        
+
         async with httpx.AsyncClient(timeout=15.0) as client:
             try:
                 # Webpay Plus REST requires a PUT request with empty body to commit/confirm
@@ -95,9 +96,9 @@ class TransbankWebpayClient:
         Useful for checking status before/after callback.
         """
         url = f"{self.base_url}/rswebpaytransaction/api/webpay/v1.2/transactions/{token}"
-        
+
         logger.info(f"Fetching Transbank transaction status. Token: {token}")
-        
+
         async with httpx.AsyncClient(timeout=15.0) as client:
             try:
                 response = await client.get(url, headers=self.headers)

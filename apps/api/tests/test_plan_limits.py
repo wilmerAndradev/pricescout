@@ -1,11 +1,10 @@
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
+
 import pytest
 from fastapi import HTTPException
-from core.plans import (
-    get_user_plan_and_limits,
-    check_monthly_search_limit,
-    increment_monthly_search_count
-)
+
+from core.plans import check_monthly_search_limit, get_user_plan_and_limits
+
 
 # Helper class to mock fluent query calls
 class MockQueryBuilder:
@@ -37,9 +36,9 @@ def test_get_user_plan_and_limits_gratis_fallback(supabase_mock):
         mock_builder = MagicMock()
         mock_builder.select.side_effect = Exception("DB error")
         return mock_builder
-        
+
     supabase_mock.table = MagicMock(side_effect=side_effect_table)
-    
+
     limits = get_user_plan_and_limits("user-123")
     assert limits["name"] == "Gratis"
     assert limits["searches_per_month"] == 10
@@ -63,9 +62,9 @@ def test_get_user_plan_and_limits_db_starter(supabase_mock):
                 "projects_max": 5
             }])
         return MockQueryBuilder()
-        
+
     supabase_mock.table = MagicMock(side_effect=side_effect_table)
-    
+
     limits = get_user_plan_and_limits("user-123")
     assert limits["name"] == "Starter Plan"
     assert limits["searches_per_month"] == 100
@@ -77,10 +76,10 @@ def test_usuario_gratis_no_puede_hacer_busqueda_11_guest(redis_mock):
     """Test that a guest/Gratis user is blocked after exceeding 10 searches in a month (11th search raises 402)."""
     # Redis returns 10 searches already done
     redis_mock.get.return_value = b"10"
-    
+
     with pytest.raises(HTTPException) as excinfo:
         check_monthly_search_limit(user_id=None, ip_address="192.168.1.1")
-        
+
     assert excinfo.value.status_code == 402
     assert "Límite de búsquedas mensuales alcanzado" in excinfo.value.detail["detail"]
 
@@ -94,9 +93,9 @@ def test_usuario_starter_puede_hacer_busqueda_100(supabase_mock):
         elif table_name == "searches":
             return MockQueryBuilder(count=99)
         return MockQueryBuilder()
-        
+
     supabase_mock.table = MagicMock(side_effect=side_effect_table)
-    
+
     # Should not raise exception
     check_monthly_search_limit(user_id="starter-user", ip_address="127.0.0.1")
 
@@ -110,12 +109,12 @@ def test_usuario_starter_no_puede_hacer_busqueda_101(supabase_mock):
         elif table_name == "searches":
             return MockQueryBuilder(count=100)
         return MockQueryBuilder()
-        
+
     supabase_mock.table = MagicMock(side_effect=side_effect_table)
-    
+
     with pytest.raises(HTTPException) as excinfo:
         check_monthly_search_limit(user_id="starter-user", ip_address="127.0.0.1")
-        
+
     assert excinfo.value.status_code == 402
     assert "Límite de búsquedas mensuales alcanzado" in excinfo.value.detail["detail"]
 

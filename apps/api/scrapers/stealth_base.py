@@ -11,7 +11,8 @@ de DynamicFetcher. Usado para tiendas con Cloudflare:
 """
 
 import logging
-from scrapers.base import ScraplingBaseScraper, _parse_clp
+
+from scrapers.base import ScraplingBaseScraper
 
 logger = logging.getLogger(__name__)
 

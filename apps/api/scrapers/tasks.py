@@ -15,9 +15,10 @@ if not os.environ.get("NEXT_PUBLIC_SUPABASE_URL"):
 
 import asyncio
 import logging
+
+from scrapers.registry import SyncMethod, get_active_stores, get_store_by_slug
 from tasks.celery_app import app
 from tasks.jobs import supabase_writer
-from scrapers.registry import get_store_by_slug, get_active_stores, SyncMethod
 
 logger = logging.getLogger(__name__)
 
@@ -35,11 +36,11 @@ async def _sync_store_async(store_slug: str) -> dict:
     store_config = get_store_by_slug(store_slug)
     if not store_config:
         raise ValueError(f"Tienda no encontrada en el registro: {store_slug}")
-        
+
     if not store_config.active:
         logger.info(f"Tienda {store_slug} está inactiva, ignorando sincronización.")
         return {"status": "inactive", "store": store_slug}
-        
+
     # Instanciar el scraper correcto según la estrategia
     if store_config.sync_method == SyncMethod.SHOPIFY_JSON:
         from scrapers.strategies.shopify_json import ShopifyJsonScraper
@@ -67,10 +68,10 @@ async def _sync_store_async(store_slug: str) -> dict:
         )
     else:
         raise ValueError(f"Estrategia de sync desconocida: {store_config.sync_method}")
-        
+
     # Ejecutar el scraper con el cliente de Supabase
     result = await scraper.run(db_client=supabase_writer)
-    
+
     return {
         "status": "success" if result.success else "failed",
         "store": store_slug,
@@ -100,10 +101,10 @@ def sync_all_stores() -> dict:
     """Tarea Celery para sincronizar todas las tiendas activas en paralelo (or local fallback)."""
     active_stores = get_active_stores()
     logger.info(f"Encolando tareas de sincronización en paralelo para {len(active_stores)} tiendas.")
-    
+
     from tasks.celery_app import check_celery_available
     celery_ok = check_celery_available()
-    
+
     for store in active_stores:
         if celery_ok:
             sync_store.delay(store.slug)
@@ -113,7 +114,7 @@ def sync_all_stores() -> dict:
                 run_async(_sync_store_async(store.slug))
             except Exception as e:
                 logger.error(f"Failed to sync {store.slug} in local mode: {e}")
-        
+
     return {
         "message": f"Queued/executed sync tasks for {len(active_stores)} stores",
         "stores": [s.slug for s in active_stores]
@@ -125,7 +126,7 @@ if __name__ == "__main__":
     if len(sys.argv) < 2:
         print("Uso: python -m scrapers.tasks [sync_store <store_slug> | sync_all_stores]")
         sys.exit(1)
-        
+
     cmd = sys.argv[1]
     # Configurar logging a consola para la ejecución directa
     logging.basicConfig(
@@ -133,7 +134,7 @@ if __name__ == "__main__":
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
         handlers=[logging.StreamHandler(sys.stdout)]
     )
-    
+
     if cmd == "sync_store":
         if len(sys.argv) < 3:
             print("Error: Se requiere el slug de la tienda.")

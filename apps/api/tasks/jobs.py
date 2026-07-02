@@ -1,10 +1,12 @@
 import logging
 import os
-from tasks.celery_app import app
-from supabase import create_client, Client
+
+from supabase import Client, create_client
+
 from auth import execute_with_retry
 from scrapers.matcher import score_match
 from scrapers.normalizer import is_dupe_product
+from tasks.celery_app import app
 
 logger = logging.getLogger(__name__)
 
@@ -59,18 +61,18 @@ def get_relevant_stores_for_category(category: str, limit: int = 5) -> list:
     for store, categories in STORE_CATEGORIES.items():
         if category in categories:
             matching_stores.append(store)
-            
+
     stores = []
     for s in matching_stores:
         if s not in stores:
             stores.append(s)
-            
+
     for s in general_stores:
         if len(stores) >= limit:
             break
         if s not in stores:
             stores.append(s)
-            
+
     return stores[:limit]
 
 
@@ -83,16 +85,16 @@ def scrape_store_search_task(self, search_id: str, store_domain: str, query: str
     extracts the product details, and saves the result to `search_results`.
     """
     logger.info(f"Starting store search on '{store_domain}' for '{query}' | Search ID: {search_id}")
-    
+
     store_name = STORE_NAMES.get(store_domain, "Tienda")
-    
+
     try:
         from scrapers.store_search import search_store_product_url
         from tasks.scraping_router import route_and_extract
-        
+
         # 1. Discover product URL
         product_url = search_store_product_url(store_domain, query)
-        
+
         if not product_url:
             # Save empty result so the frontend knows we completed this store but found nothing
             supabase_writer.table("search_results").insert({
@@ -107,9 +109,9 @@ def scrape_store_search_task(self, search_id: str, store_domain: str, query: str
                 "confidence_score": "low"
             }).execute()
             return {"status": "no_results", "store": store_domain}
-            
+
         # 2. Clean URL: remove tracking/sponsored params that cause timeouts
-        from urllib.parse import urlparse, urlunparse, urlencode, parse_qs
+        from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
         try:
             parsed = urlparse(product_url)
             # Remove query params known to cause issues
@@ -124,7 +126,7 @@ def scrape_store_search_task(self, search_id: str, store_domain: str, query: str
 
         # 3. Extract details from product URL
         data = route_and_extract(product_url, supabase_client=supabase_writer)
-        
+
         # Save complete result to database
         supabase_writer.table("search_results").insert({
             "search_id": search_id,
@@ -141,9 +143,9 @@ def scrape_store_search_task(self, search_id: str, store_domain: str, query: str
             "extraction_method": data.get("extraction_method", "deterministic"),
             "confidence_score": data.get("confidence_score") or "high"
         }).execute()
-        
+
         return {"status": "success", "store": store_domain, "url": product_url}
-        
+
     except Exception as exc:
         logger.error(f"Error in scrape_store_search_task for {store_domain}: {exc}")
         # Insert failure record
@@ -240,14 +242,14 @@ def parse_product_details(raw_title: str) -> tuple[str, str, str, str, str]:
     (marca, título_limpio, género, volumen, sku)
     """
     title = raw_title.strip()
-    
+
     # 1. Encontrar la marca
     detected_brand = "Genérico"
     title_lower = title.lower()
-    
+
     # Ordenamos de más largo a más corto para evitar colisiones tempranas parciales
     sorted_brands = sorted(BRAND_SYNONYMS.keys(), key=len, reverse=True)
-    
+
     for brand_key in sorted_brands:
         synonyms = BRAND_SYNONYMS[brand_key]
         found = False
@@ -262,33 +264,33 @@ def parse_product_details(raw_title: str) -> tuple[str, str, str, str, str]:
                 break
         if found:
             break
-            
+
     # 2. Extraer volumen
     volume = ""
     vol_match = re.search(r'\b(\d+)\s*ml\b', title_lower)
     if vol_match:
         volume = f"{vol_match.group(1)}ml"
-        
+
     # 3. Extraer género
     gender = "Unisex"
     if re.search(r'\b(mujer|women|woman|femme|ella|girl|lady)\b', title_lower):
         gender = "Mujer"
     elif re.search(r'\b(hombre|men|man|homme|él|boy|gentleman)\b', title_lower):
         gender = "Hombre"
-        
+
     # 4. Extraer SKU/Código del final (ej: dio28, DIO30, DIO25)
     sku = ""
     sku_match = re.search(r'\b([a-zA-Z]+\d+)\b$', title)
     if sku_match:
         sku = sku_match.group(1).upper()
-        
+
     # 5. Limpiar el título
     clean = title
-    
+
     # Remover SKU del final si existe
     if sku:
         clean = re.sub(r'\b' + re.escape(sku_match.group(1)) + r'\b$', '', clean).strip()
-        
+
     # Remover todos los sinónimos de la marca detectada
     if detected_brand != "Genérico":
         synonyms = BRAND_SYNONYMS[detected_brand]
@@ -298,17 +300,17 @@ def parse_product_details(raw_title: str) -> tuple[str, str, str, str, str]:
             else:
                 pattern = r'\b' + re.escape(syn) + r'\b|\b' + re.escape(syn.replace(" ", "")) + r'\b'
             clean = re.sub(pattern, '', clean, flags=re.IGNORECASE)
-            
+
     # Limpiar espacios extra y guiones
     clean = re.sub(r'\s+', ' ', clean)
     clean = clean.strip().strip("-").strip()
-    
+
     # Capitalizar de forma inteligente
     if clean:
         clean = smart_capitalize(clean)
     else:
         clean = "Producto"
-        
+
     return detected_brand, clean, gender, volume, sku
 
 @app.task(bind=True)
@@ -318,27 +320,27 @@ def run_autonomous_search(self, search_id: str):
     Queries the database products table instead of doing real-time scraping.
     """
     logger.info(f"Starting database-driven autonomous search task for Search ID: {search_id}")
-    
+
     try:
         # Fetch the search record
         res = execute_with_retry(supabase_writer.table("searches").select("*").eq("id", search_id))
         if not res.data:
             logger.error(f"Search record not found for ID: {search_id}")
             return
-            
+
         search_record = res.data[0]
         query = search_record["query"]
         user_id = search_record.get("user_id")
         environment_id = search_record.get("environment_id")
-        
+
         # 1. Update status to processing
         execute_with_retry(supabase_writer.table("searches").update({"status": "processing"}).eq("id", search_id))
-        
+
         # Get user plan limits and environment restrictions
         from core.plans import get_user_plan_and_limits
         plan_limits = get_user_plan_and_limits(user_id)
         max_stores = plan_limits["stores_per_search"]
-        
+
         allowed_domains = None
         if environment_id:
             try:
@@ -353,7 +355,7 @@ def run_autonomous_search(self, search_id: str):
                     allowed_domains = {d.strip().lower() for d in (store_domains + custom_domains) if d.strip()}
             except Exception as env_err:
                 logger.error(f"Error fetching environment domains in search task: {env_err}")
-        
+
         # 2. Inferencia de categoría rápida
         category = "perfumería"
         try:
@@ -369,7 +371,7 @@ def run_autonomous_search(self, search_id: str):
         #    - Nunca excluye productos relacionados (estuches, variantes de ml)
         from search.query_builder import build_search_query
         query_data = build_search_query(query)
-        
+
         products = []
         try:
             rpc_res = execute_with_retry(supabase_writer.rpc("search_products", {
@@ -386,7 +388,7 @@ def run_autonomous_search(self, search_id: str):
         except Exception as fts_err:
             logger.warning(f"FTS RPC failed, falling back to ILIKE: {fts_err}")
             # Fallback: ILIKE simple si la RPC falla por algún motivo
-            from scrapers.normalizer import normalize_product_title, extract_volume_ml
+            from scrapers.normalizer import extract_volume_ml, normalize_product_title
             normalized_query = normalize_product_title(query)
             query_volume = extract_volume_ml(query)
             terms = [t for t in normalized_query.split() if len(t) > 1]
@@ -398,7 +400,7 @@ def run_autonomous_search(self, search_id: str):
                     q_builder = q_builder.ilike("title_normalized", f"%{term}%")
                 fallback_res = q_builder.limit(60).execute()
                 products = fallback_res.data or []
-            
+
         # 4. Registrar los resultados en la tabla search_results
         SLUG_TO_DOMAIN_AND_NAME = {
             "cosmetic": ("cosmetic.cl", "Cosmetic"),
@@ -417,10 +419,10 @@ def run_autonomous_search(self, search_id: str):
             "sairam": ("sairam.cl", "Sairam"),
             "joy-perfumes": ("joyperfumes.cl", "JoyPerfumes")
         }
-        
+
         results_inserted = 0
         inserted_store_domains = set()
-        
+
         # Deduplicar la lista de productos por store_slug y URL única para evitar tarjetas duplicadas
         unique_products = {}
         for prod in products:
@@ -428,7 +430,7 @@ def run_autonomous_search(self, search_id: str):
             url = prod.get("url")
             if not slug or not url:
                 continue
-            
+
             key = (slug, url)
             existing = unique_products.get(key)
             if not existing:
@@ -437,7 +439,7 @@ def run_autonomous_search(self, search_id: str):
                 # Priorizar el que esté disponible (available = True)
                 existing_avail = existing.get("available", True)
                 current_avail = prod.get("available", True)
-                
+
                 if current_avail and not existing_avail:
                     unique_products[key] = prod
                 elif current_avail == existing_avail:
@@ -446,50 +448,50 @@ def run_autonomous_search(self, search_id: str):
                     current_seen = prod.get("last_seen_at") or ""
                     if current_seen > existing_seen:
                         unique_products[key] = prod
-                        
+
         products = list(unique_products.values())
 
         for prod in products:
             raw_title = prod.get("title") or ""
-            
+
             # Use continuous scoring matching engine
             score = score_match(query, raw_title)
             is_dupe = is_dupe_product(raw_title)
-            
+
             if is_dupe:
                 if score < 0.25:
                     continue
             else:
                 if score < 0.80:
                     continue
-                
+
             slug = prod.get("store_slug")
             domain_name = SLUG_TO_DOMAIN_AND_NAME.get(slug)
             if not domain_name:
                 continue
             domain, name = domain_name
             domain_lower = domain.strip().lower()
-            
+
             # Restringir a los dominios del entorno si está configurado
             if allowed_domains is not None and domain_lower not in allowed_domains:
                 continue
-                
+
             # Validar límite de tiendas por búsqueda
             if domain_lower not in inserted_store_domains:
                 if max_stores != -1 and len(inserted_store_domains) >= max_stores:
                     # Se alcanzó el límite de tiendas para este plan, ignorar resultados de nuevos dominios
                     continue
                 inserted_store_domains.add(domain_lower)
-            
+
             # Limpiar el título y extraer los metadatos estructurados
             brand, clean_title, gender, vol, sku = parse_product_details(raw_title)
-            
+
             # Si el volumen no se extrajo del título, usar el de la base de datos
             if not vol:
                 db_vol = prod.get("volume_ml")
                 if db_vol:
                     vol = f"{db_vol}ml"
-            
+
             # Si no hay SKU en el título, buscarlo en raw_data de variants si existe
             if not sku:
                 sku_raw = prod.get("raw_data", {}).get("sku")
@@ -497,7 +499,7 @@ def run_autonomous_search(self, search_id: str):
                     sku_raw = prod.get("raw_data", {})["variants"][0].get("sku")
                 if sku_raw:
                     sku = str(sku_raw).upper()
-                    
+
             # Si es regular (sin tipo estuche), marcar tipo
             presentation = "Regular"
             title_lower = raw_title.lower()
@@ -505,7 +507,7 @@ def run_autonomous_search(self, search_id: str):
                 presentation = "Estuche/Set"
             elif "tester" in title_lower or "probador" in title_lower:
                 presentation = "Tester"
-                
+
             # Serializar metadatos en la descripción: brand=X;gender=Y;volume=Z;type=T;sku=S
             metadata_parts = [
                 f"brand={brand}",
@@ -515,12 +517,12 @@ def run_autonomous_search(self, search_id: str):
                 f"sku={sku}"
             ]
             desc_val = ";".join(metadata_parts)
-            
+
             # Calcular descuento si tiene original price
             price = prod.get("price", 0)
             orig_price = None
             raw_data = prod.get("raw_data") or {}
-            
+
             if raw_data:
                 orig_price = raw_data.get("compare_at_price") or raw_data.get("price_original") or raw_data.get("original_price")
                 if not orig_price and "variants" in raw_data and raw_data["variants"]:
@@ -541,13 +543,13 @@ def run_autonomous_search(self, search_id: str):
                     # Si está en formato centavos de Shopify (ej: 4500000 para 45000), dividir
                     if orig_price_val > price_clp * 10:
                         orig_price_val = orig_price_val / 100.0
-                    
+
                     if orig_price_val > price_clp:
                         orig_price_int = int(orig_price_val)
                         discount = int((orig_price_int - price_clp) / orig_price_int * 100)
             except Exception:
                 orig_price_int = None
-                
+
             execute_with_retry(supabase_writer.table("search_results").insert({
                 "search_id": search_id,
                 "store_domain": domain,
@@ -564,12 +566,12 @@ def run_autonomous_search(self, search_id: str):
                 "confidence_score": "high"
             }))
             results_inserted += 1
-            
+
         logger.info(f"Database search completed. Inserted {results_inserted} results for Search ID: {search_id}")
-        
+
         # 5. Marcar búsqueda como completada
         execute_with_retry(supabase_writer.table("searches").update({"status": "completed"}).eq("id", search_id))
-        
+
     except Exception as e:
         logger.error(f"Error in run_autonomous_search: {e}")
         try:
@@ -593,7 +595,7 @@ def scrape_url_task(self, url: str, user_id: str = None, comparison_job_id: str 
     else:
         import uuid
         job_id = f"local_{uuid.uuid4()}"
-        
+
     logger.info(f"Starting scrape job {job_id} for URL: {url} by user {user_id}")
 
     try:
@@ -632,7 +634,7 @@ def scrape_url_task(self, url: str, user_id: str = None, comparison_job_id: str 
         logger.error(f"Failed to scrape {url}: {str(exc)}")
         retries = self.request.retries if is_celery else 0
         max_retries = self.max_retries if is_celery else 0
-        
+
         if retries >= max_retries:
             # Insert failed record so the frontend knows this URL is done
             if user_id and comparison_job_id:

@@ -1,9 +1,10 @@
-from abc import ABC, abstractmethod
-import logging
-import re
 import asyncio
+import logging
 import random
+import re
+from abc import ABC, abstractmethod
 from datetime import datetime, timezone
+
 from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
@@ -47,7 +48,7 @@ class ScraperBase(ABC):
         self.store_url = store_url.rstrip("/")
         self.catalog_url = catalog_url
         self.logger = logging.getLogger(f"scraper.{self.store_slug}")
-        
+
         # Cargar retardos de peticiones desde el entorno
         import os
         try:
@@ -75,14 +76,14 @@ class ScraperBase(ABC):
         """
         self.logger.info(f"Iniciando sincronización para la tienda: {self.store_name} ({self.store_slug})")
         result = SyncResult(store_slug=self.store_slug)
-        
+
         try:
             products = await self.fetch_products()
             result.total_scraped = len(products)
-            
+
             if db_client:
                 await self._save_to_db(db_client, products, result)
-                
+
             self.logger.info(
                 f"Sincronización completada para {self.store_name}. "
                 f"Extraídos: {result.total_scraped} | Creados: {result.added} | "
@@ -92,7 +93,7 @@ class ScraperBase(ABC):
             self.logger.exception(f"Error crítico en ejecución de sync para {self.store_slug}: {e}")
             result.errors.append(str(e))
             result.success = False
-            
+
         return result
 
     async def _save_to_db(self, db_client, products: list[ScrapedProduct], result: SyncResult):
@@ -102,7 +103,7 @@ class ScraperBase(ABC):
         self.logger.info(f"Guardando {len(products)} productos en la base de datos...")
         now_iso = datetime.now(timezone.utc).isoformat()
         from auth import execute_with_retry
-        
+
         # Actualizar estado de sincronización de la tienda
         try:
             execute_with_retry(db_client.table("stores").upsert({
@@ -173,7 +174,7 @@ class ScraperBase(ABC):
                     for db_prod in upsert_res.data:
                         product_id = db_prod.get("id")
                         first_seen = db_prod.get("first_seen_at")
-                        
+
                         # Calcular estadísticas (Creado vs Actualizado)
                         is_new = False
                         if first_seen:
@@ -184,12 +185,12 @@ class ScraperBase(ABC):
                                     is_new = True
                             except Exception:
                                 pass
-                                
+
                         if is_new:
                             result.added += 1
                         else:
                             result.updated += 1
-                            
+
                         # Preparar registro de historial
                         history_records.append({
                             "product_id": product_id,
@@ -218,12 +219,12 @@ class ScraperBase(ABC):
                                 on_conflict="store_slug,title_normalized"
                             )
                         )
-                        
+
                         if upsert_res.data:
                             db_prod = upsert_res.data[0]
                             product_id = db_prod.get("id")
                             first_seen = db_prod.get("first_seen_at")
-                            
+
                             is_new = False
                             if first_seen:
                                 try:
@@ -233,12 +234,12 @@ class ScraperBase(ABC):
                                         is_new = True
                                 except Exception:
                                     pass
-                                    
+
                             if is_new:
                                 result.added += 1
                             else:
                                 result.updated += 1
-                                
+
                             execute_with_retry(
                                 db_client.table("product_price_history").insert({
                                     "product_id": product_id,
